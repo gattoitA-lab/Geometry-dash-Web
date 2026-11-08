@@ -81324,6 +81324,8 @@ function drawObject(ctx, o, px, py, u, opt) {
     ctx.rotate((o.r || 0) * Math.PI / 2);
     if (o.sc && o.sc !== 1)
         ctx.scale(o.sc, o.sc);
+    if (o.sx || o.sy)
+        ctx.scale(o.sx || 1, o.sy || 1);
     if (o.a)
         ctx.rotate(o.a * Math.PI / 180);
     if (opt.alpha !== undefined)
@@ -81337,7 +81339,7 @@ function drawObject(ctx, o, px, py, u, opt) {
         case "glass":
         case "deco":
         case "brick": {
-            var tc = def.tint ? (o.color || def.color) : null;
+            var tc = o.color || (def.tint ? def.color : null);
             if (tc)
                 ctx.fillStyle = tc + "55";
             else if (def.kind === "glass")
@@ -81424,7 +81426,7 @@ function drawObject(ctx, o, px, py, u, opt) {
                     ctx.shadowBlur = u * .28;
                 }
                 ctx.fill();
-                ctx.strokeStyle = o.t === "spike_glass" ? "#9fe8ff" : "#fff";
+                ctx.strokeStyle = o.t === "spike_glass" ? "#9fe8ff" : (o.color || "#fff");
                 ctx.lineWidth = lw;
                 ctx.stroke();
                 ctx.shadowBlur = 0;
@@ -97403,7 +97405,15 @@ function gdEncodeLevel(data, defs) {
     var st = data.settings || {};
     var bg = gdRgb(st.bg), gr = gdRgb(st.ground);
     var ch = function (id, c) { return "1_" + c[0] + "_2_" + c[1] + "_3_" + c[2] + "_11_255_12_255_13_255_4_-1_6_" + id + "_7_1_15_1_18_0_8_1|"; };
-    var head = "kS38," + ch(1000, bg) + ch(1001, gr) + ch(1009, gr) + ",kA13,0,kA15,0,kA16,0,kA14,,kA6,0,kA7,0,kA17,0,kA18,0,kS39,0,kA2," + Math.max(0, GD_MODES.indexOf(st.mode || "cube")) + ",kA3," + (st.mini ? 1 : 0) + ",kA8,0,kA4," + ((_d = GD_SPEEDOUT[st.speed === undefined ? 1 : st.speed]) !== null && _d !== void 0 ? _d : 0) + ",kA9,0,kA10,0,kA11,0;";
+    var extraColors = "";
+    var _cmap = st.colors || {};
+    Object.keys(_cmap).forEach(function (cid) {
+        var n = parseInt(cid, 10);
+        if (!isFinite(n) || n === 1000 || n === 1001 || n === 1009)
+            return;
+        extraColors += ch(n, gdRgb(_cmap[cid]));
+    });
+    var head = "kS38," + ch(1000, bg) + ch(1001, gr) + ch(1009, gr) + extraColors + ",kA13,0,kA15,0,kA16,0,kA14,,kA6,0,kA7,0,kA17,0,kA18,0,kS39,0,kA2," + Math.max(0, GD_MODES.indexOf(st.mode || "cube")) + ",kA3," + (st.mini ? 1 : 0) + ",kA8,0,kA4," + ((_d = GD_SPEEDOUT[st.speed === undefined ? 1 : st.speed]) !== null && _d !== void 0 ? _d : 0) + ",kA9,0,kA10,0,kA11,0;";
     var out = [head];
     var lost = 0;
     var lostTypes = {};
@@ -97428,6 +97438,14 @@ function gdEncodeLevel(data, defs) {
                 p.push(6, gdNum(rot < 0 ? rot + 360 : rot));
             if (o.sc && o.sc !== 1)
                 p.push(32, o.sc);
+            if (o.sx)
+                p.push(128, o.sx);
+            if (o.sy)
+                p.push(129, o.sy);
+            if (o.c1)
+                p.push(21, o.c1);
+            if (o.c2)
+                p.push(22, o.c2);
             var tg = (o.tg === undefined || o.tg === null) ? 1 : o.tg;
             var dur = o.dur === undefined ? 1 : o.dur;
             var ez = GD_EASE_OUT[o.ease] === undefined ? 1 : GD_EASE_OUT[o.ease];
@@ -97565,12 +97583,16 @@ function gdDecodeLevel(str, defs) {
         settings.speed = GD_SPEEDIN[sp];
     var chan = function (v) { var m = {}; String(v).split("_"); var a = String(v).split("_"); for (var i = 0; i + 1 < a.length; i += 2)
         m[a[i]] = a[i + 1]; return m; };
+    var colors = {};
     if (H.kS38) {
         H.kS38.split("|").forEach(function (e) {
             if (!e)
                 return;
             var m = chan(e);
             var c = gdHex(+m[1], +m[2], +m[3]);
+            var cid = parseInt(m[6], 10);
+            if (isFinite(cid))
+                colors[cid] = c;
             if (m[6] === "1000")
                 settings.bg = c;
             else if (m[6] === "1001")
@@ -97587,6 +97609,7 @@ function gdDecodeLevel(str, defs) {
             settings.ground = gdHex(+m[1], +m[2], +m[3]);
         }
     }
+    settings.colors = colors;
     var objects = [];
     var skipped = 0;
     for (var i = 1; i < parts.length; i++) {
@@ -97625,6 +97648,13 @@ function gdDecodeLevel(str, defs) {
         deg += q * 90;
         deg = ((deg % 360) + 360) % 360;
         var o = { t: t, x: x, y: y };
+        var cc1 = parseInt(K[19] || K[21], 10);
+        if (isFinite(cc1) && colors[cc1]) { o.c1 = cc1; o.color = colors[cc1]; }
+        var cc2 = parseInt(K[22], 10);
+        if (isFinite(cc2) && colors[cc2]) { o.c2 = cc2; o.color2 = colors[cc2]; }
+        var xs = parseFloat(K[128]), ys = parseFloat(K[129]);
+        if (isFinite(xs) && xs !== 0 && xs !== 1) o.sx = Math.round(xs * 1000) / 1000;
+        if (isFinite(ys) && ys !== 0 && ys !== 1) o.sy = Math.round(ys * 1000) / 1000;
         var canon = GD_ID[t];
         if (canon !== undefined && String(canon) !== String(K[1]))
             o.gid = idn;
