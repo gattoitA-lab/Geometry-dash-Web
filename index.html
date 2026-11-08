@@ -80287,6 +80287,7 @@ exports.OBJECTS = [
     d("speed_4", "speed", "speed", 1, 2, "#ff3333", "Speed 4x", "Velocità 4x"),
     d("coin", "coin", "items", 1, 1, "#ffd700", "Secret coin", "Moneta segreta"),
     d("text", "text", "items", 1, 1, "#ffffff", "Text", "Testo"),
+    Object.assign(d("startpos", "trigger", "triggers", 1, 1, "#ffe600", "Start Pos", "Start Pos"), { norot: true }),
     Object.assign(d("trigger_color", "trigger", "triggers", 1, 1, "#00f0ff", "Color trigger", "Trigger colore"), { colorable: true, defaults: { color: "#c22fd0" } }),
     Object.assign(d("block_2x1", "solid", "parts", 2, 1, "#ffffff", "Wide block 2x1", "Blocco largo 2x1"), { "norot": true }),
     d("block_2x2", "solid", "parts", 2, 2, "#ffffff", "Block 2x2", "Blocco 2x2"),
@@ -81689,7 +81690,7 @@ function drawObject(ctx, o, px, py, u, opt) {
             break;
         }
         case "trigger": {
-            var lab = { trigger_color: "COL", trigger_ground: "GND", trigger_music: "♪", trigger_music_stop: "■♪", trigger_volume: "VOL", trigger_sfx: "SFX", trigger_flash: "FLS", trigger_shake: "SHK", trigger_speed: "SPD", trigger_move: "MOV", trigger_rotate: "ROT", trigger_scale: "SCL", trigger_alpha: "ALP", trigger_toggle: "TOG", trigger_stop: "STP", trigger_pulse: "PLS", trigger_shader: "SHD", trigger_zoom: "ZOM", trigger_timewarp: "TWP", trigger_spawn: "SPN", collision_block: "CBK", trigger_collision: "COL", trigger_gradient: "GRD", trigger_keyframe: "KEY", trigger_follow: "FOL", trigger_touch: "TCH", trigger_gravity: "GRV", trigger_camoff: "COF", trigger_camrot: "CRT", trigger_camstatic: "CST", trigger_pickup: "PCK", trigger_count: "CNT", trigger_icount: "ICT" }[o.t] || "TRG";
+            var lab = { startpos: "SP", trigger_color: "COL", trigger_ground: "GND", trigger_music: "♪", trigger_music_stop: "■♪", trigger_volume: "VOL", trigger_sfx: "SFX", trigger_flash: "FLS", trigger_shake: "SHK", trigger_speed: "SPD", trigger_move: "MOV", trigger_rotate: "ROT", trigger_scale: "SCL", trigger_alpha: "ALP", trigger_toggle: "TOG", trigger_stop: "STP", trigger_pulse: "PLS", trigger_shader: "SHD", trigger_zoom: "ZOM", trigger_timewarp: "TWP", trigger_spawn: "SPN", collision_block: "CBK", trigger_collision: "COL", trigger_gradient: "GRD", trigger_keyframe: "KEY", trigger_follow: "FOL", trigger_touch: "TCH", trigger_gravity: "GRV", trigger_camoff: "COF", trigger_camrot: "CRT", trigger_camstatic: "CST", trigger_pickup: "PCK", trigger_count: "CNT", trigger_icount: "ICT" }[o.t] || "TRG";
             var fc = (o.t === "trigger_color" || o.t === "trigger_ground" || o.t === "trigger_pulse") ? (o.color || def.color) : def.color;
             ctx.beginPath();
             ctx.arc(0, 0, W * .35, 0, Math.PI * 2);
@@ -82701,6 +82702,12 @@ var Engine = (function () {
         this.opts = opts;
         this.mp = opts.mp || null;
         this.practice = !!opts.practice;
+        this.startSpawn = null;
+        if (this.practice) {
+            var spObjs = data.objects.filter(function (o) { return o.t === "startpos"; }).sort(function (a, b) { return a.x - b.x; });
+            if (spObjs.length)
+                this.startSpawn = { x: spObjs[0].x, y: spObjs[0].y };
+        }
         this.bg = this.bgTarget = data.settings.bg;
     this.noBg = !!data.settings.noBg;
         this.ground = this.groundTarget = data.settings.ground;
@@ -82900,9 +82907,10 @@ var Engine = (function () {
         if (first === void 0) { first = false; }
         var st = this.data.settings;
         var mode = st.mode || "cube";
+        var sp = this.practice ? this.startSpawn : null;
         this.players = [{
-                x: 0,
-                y: 0,
+                x: sp ? sp.x : 0,
+                y: sp ? sp.y : 0,
                 vy: 0,
                 grav: 1,
                 mode: mode,
@@ -82932,7 +82940,7 @@ var Engine = (function () {
         this.bg = this.bgTarget = st.bg;
         this.noBg = !!st.noBg;
         this.ground = this.groundTarget = st.ground;
-        this.camY = this.bounds ? this.bounds.floor - .5 : -2;
+        this.camY = sp ? sp.y - 2 : this.bounds ? this.bounds.floor - .5 : -2;
         this.time = 0;
         this.lastCp = 0;
         this.trails = [[], []];
@@ -97337,7 +97345,7 @@ var GD_ID = {
     portal_grav_down: 10, portal_grav_up: 11, portal_grav_flip: 2926, portal_mirror_on: 45, portal_mirror_off: 46,
     portal_mini: 101, portal_big: 99, portal_dual_on: 286, portal_dual_off: 287, portal_tp_in: 747, portal_tp_out: 749,
     speed_0: 200, speed_1: 201, speed_2: 202, speed_3: 203, speed_4: 1334,
-    coin: 1329, text: 914,
+    coin: 1329, text: 914, startpos: 31,
     trigger_color: 899, trigger_ground: 899, trigger_pulse: 1006,
     trigger_move: 901, trigger_rotate: 1346, trigger_scale: 2067, trigger_alpha: 1007, trigger_toggle: 1049, trigger_stop: 1616,
     trigger_zoom: 1913, trigger_spawn: 1268, collision_block: 1816, trigger_collision: 1815, trigger_follow: 1347, trigger_touch: 1595, trigger_gravity: 2066, trigger_camoff: 1916, trigger_camrot: 2015, trigger_camstatic: 2062, trigger_pickup: 1817, trigger_count: 1611, trigger_icount: 1811, trigger_shake: 1520, trigger_timewarp: 1935
