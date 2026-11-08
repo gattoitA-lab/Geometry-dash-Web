@@ -237,7 +237,7 @@ if (typeof module !== "undefined") module.exports = GDCore;
 /* ===================== SERVER CONDIVISO ===================== */
 /* Uso:  node server.js          (porta 8080, dati in ./gd-data.json)
    Variabili: PORT, DATA_FILE, ADMINS (nomi separati da virgola, predefinito "gattoitaliano")  */
-var fs = require("fs"), http = require("http"), crypto = require("crypto");
+var fs = require("fs"), http = require("http"), crypto = require("crypto"), path = require("path"), zlib = require("zlib");
 var PORT = +process.env.PORT || 8080;
 var DATA_FILE = process.env.DATA_FILE || "gd-data.json";
 var ADMIN_LIST = (process.env.ADMINS || "gattoitaliano").split(",").map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
@@ -393,6 +393,59 @@ function lobbyRoute(method, path, b, u) {
 }
 
 var CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS", "Access-Control-Allow-Headers": "Content-Type,Authorization", "Access-Control-Max-Age": "86400" };
+
+/* ---------- file statici: la pagina del gioco (index.html) ---------- */
+var ROOT = __dirname;
+var MIME = { ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".ico": "image/x-icon", ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".wav": "audio/wav", ".woff": "font/woff", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8", ".webmanifest": "application/manifest+json" };
+var NO_SERVE = { "server.js": 1, "package.json": 1, "package-lock.json": 1, "gd-data.json": 1, "gd-data.json.tmp": 1, "render.yaml": 1 };
+var staticCache = {};
+function compress(raw) {
+  var opts = {};
+  opts[zlib.constants.BROTLI_PARAM_QUALITY] = 5;
+  return { gz: zlib.gzipSync(raw, { level: 6 }), br: zlib.brotliCompressSync(raw, { params: opts }) };
+}
+function notFound(res) {
+  res.writeHead(404, Object.assign({}, CORS, { "Content-Type": "text/plain; charset=utf-8" }));
+  res.end("Not Found");
+}
+function serveStatic(req, res, p) {
+  if (req.method !== "GET" && req.method !== "HEAD") { res.writeHead(405, CORS); return res.end(); }
+  var rel;
+  try { rel = p === "/" ? "index.html" : decodeURIComponent(p).replace(/^\/+/, ""); } catch (e) { return notFound(res); }
+  var file = path.resolve(ROOT, rel);
+  if (file !== ROOT && file.indexOf(ROOT + path.sep) !== 0) return notFound(res);
+  if (NO_SERVE[path.basename(file)]) return notFound(res);
+  var st;
+  try { st = fs.statSync(file); } catch (e) { return notFound(res); }
+  if (!st.isFile()) return notFound(res);
+  var ext = path.extname(file).toLowerCase();
+  var hit = staticCache[file];
+  if (!hit || hit.mtime !== st.mtimeMs) {
+    var raw = fs.readFileSync(file);
+    hit = { mtime: st.mtimeMs, raw: raw, gz: null, br: null };
+    if (raw.length > 1024 && (ext === ".html" || ext === ".js" || ext === ".css" || ext === ".json" || ext === ".svg")) {
+      var packed = compress(raw);
+      hit.gz = packed.gz; hit.br = packed.br;
+    }
+    staticCache[file] = hit;
+  }
+  var etag = '"W/' + st.mtimeMs.toString(16) + "-" + hit.raw.length.toString(16) + '"';
+  var headers = Object.assign({}, CORS, {
+    "Content-Type": MIME[ext] || "application/octet-stream",
+    "ETag": etag,
+    "Cache-Control": ext === ".html" ? "no-cache" : "public, max-age=3600",
+    "Vary": "Accept-Encoding",
+    "X-Content-Type-Options": "nosniff"
+  });
+  if (req.headers["if-none-match"] === etag) { res.writeHead(304, headers); return res.end(); }
+  var body = hit.raw;
+  var accept = req.headers["accept-encoding"] || "";
+  if (hit.br && /\bbr\b/.test(accept)) { body = hit.br; headers["Content-Encoding"] = "br"; }
+  else if (hit.gz && /\bgzip\b/.test(accept)) { body = hit.gz; headers["Content-Encoding"] = "gzip"; }
+  headers["Content-Length"] = body.length;
+  res.writeHead(200, headers);
+  res.end(req.method === "HEAD" ? undefined : body);
+}
 http.createServer(function (req, res) {
   if (req.method === "OPTIONS") { res.writeHead(204, CORS); return res.end(); }
   var chunks = [], size = 0;
@@ -407,8 +460,8 @@ http.createServer(function (req, res) {
         res.writeHead(r.status, h); res.end(t);
       });
     }
-    if (path === "/" || path === "/ping" || path === "/api") { res.writeHead(200, Object.assign({}, CORS, { "Content-Type": "application/json" })); return res.end('{"ok":true,"name":"geometry-dash-server"}'); }
-    if (path.indexOf("/api") !== 0) { res.writeHead(404, CORS); return res.end(); }
+    if (path === "/ping" || path === "/api") { res.writeHead(200, Object.assign({}, CORS, { "Content-Type": "application/json" })); return res.end('{"ok":true,"name":"geometry-dash-server"}'); }
+    if (path.indexOf("/api") !== 0) { return serveStatic(req, res, path); }
     path = path.slice(4) || "/";
     var auth = /^Bearer (\S+)$/.exec(req.headers["authorization"] || "");
     curUser = auth && store.tokens[auth[1]] || null;

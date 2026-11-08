@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: geometry-dash-web-italia
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install --no-audit --no-fund
+    startCommand: npm start
+    healthCheckPath: /ping
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: ADMINS
+        value: gattoitaliano
