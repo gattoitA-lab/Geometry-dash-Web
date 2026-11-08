@@ -4,5 +4,8 @@
   "private": true,
   "main": "server.js",
   "scripts": { "start": "node server.js" },
-  "engines": { "node": ">=18" }
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "mongodb": "^6.13.0"
+  }
 }

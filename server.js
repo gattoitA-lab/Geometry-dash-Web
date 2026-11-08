@@ -242,14 +242,54 @@ var PORT = +process.env.PORT || 8080;
 var DATA_FILE = process.env.DATA_FILE || "gd-data.json";
 var ADMIN_LIST = (process.env.ADMINS || "gattoitaliano").split(",").map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
 var store = null;
+/* ---------- persistenza: MongoDB se MONGODB_URI e' impostata, altrimenti file locale ---------- */
+var MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URL || "";
+var MONGO_DB = process.env.MONGODB_DB || "geometrydash";
+var mongoClient = null, mongoColl = null, mongoPending = null, mongoSaving = false;
+var storageMode = MONGO_URI ? "connecting" : "file";
+function saveMongo(data) {
+  if (!mongoColl) return;
+  if (mongoSaving) { mongoPending = data; return; }
+  mongoSaving = true;
+  mongoColl.updateOne({ _id: "gd" }, { $set: { data: data, updated: new Date() } }, { upsert: true })
+    .catch(function (e) { console.error("[db] salvataggio MongoDB fallito:", e.message); })
+    .then(function () { mongoSaving = false; if (mongoPending) { var p = mongoPending; mongoPending = null; saveMongo(p); } });
+}
+function connectMongo() {
+  if (!MONGO_URI) { console.log("[db] modalita file: " + DATA_FILE); return; }
+  var MongoClient;
+  try { MongoClient = require("mongodb").MongoClient; } catch (e) { console.error("[db] driver mongodb assente, uso il file:", e.message); storageMode = "file"; return; }
+  var client = new MongoClient(MONGO_URI, { serverSelectionTimeoutMS: 8000 });
+  client.connect()
+    .then(function () { mongoClient = client; mongoColl = client.db(MONGO_DB).collection("state"); return mongoColl.findOne({ _id: "gd" }); })
+    .then(function (doc) {
+      if (doc && doc.data && typeof doc.data === "object") {
+        store = doc.data;  store = core.getDb();
+store.tokens = store.tokens || {};
+connectMongo();
+        dirty = false;
+        console.log("[db] dati caricati da MongoDB: " + Object.keys(store.users || {}).length + " account, " + (store.levels || []).length + " livelli");
+      } else {
+        dirty = true;
+        console.log("[db] MongoDB vuoto: carico i dati locali nel database");
+      }
+      storageMode = "mongo";
+    })
+    .catch(function (e) {
+      console.error("[db] connessione MongoDB fallita, continuo col file locale:", e.message);
+      storageMode = "file";
+      try { client.close(); } catch (e2) {}
+    });
+}
 try { store = JSON.parse(fs.readFileSync(DATA_FILE, "utf8")); } catch (e) { store = null; }
 var curUser = null, dirty = false, saving = false;
 function flush() {
   if (!dirty || saving) return;
   dirty = false; saving = true;
-  fs.writeFile(DATA_FILE + ".tmp", JSON.stringify(store), function (e) {
+  var snap = store;
+  fs.writeFile(DATA_FILE + ".tmp", JSON.stringify(snap), function (e) {
     if (!e) { try { fs.renameSync(DATA_FILE + ".tmp", DATA_FILE); } catch (e2) {} }
-    saving = false; if (dirty) flush();
+    saveMongo(snap); saving = false; if (dirty) flush();
   });
 }
 setInterval(flush, 2000);
@@ -460,7 +500,7 @@ http.createServer(function (req, res) {
         res.writeHead(r.status, h); res.end(t);
       });
     }
-    if (path === "/ping" || path === "/api") { res.writeHead(200, Object.assign({}, CORS, { "Content-Type": "application/json" })); return res.end('{"ok":true,"name":"geometry-dash-server"}'); }
+    if (path === "/ping" || path === "/api") { res.writeHead(200, Object.assign({}, CORS, { "Content-Type": "application/json" })); return res.end(JSON.stringify({ ok: true, name: "geometry-dash-server", storage: storageMode, users: Object.keys(store.users || {}).length, levels: (store.levels || []).length })); }
     if (path.indexOf("/api") !== 0) { return serveStatic(req, res, path); }
     path = path.slice(4) || "/";
     var auth = /^Bearer (\S+)$/.exec(req.headers["authorization"] || "");
@@ -473,4 +513,4 @@ http.createServer(function (req, res) {
   });
 }).listen(PORT, function () { console.log("Geometry Dash server in ascolto sulla porta " + PORT + " (admin: " + ADMIN_LIST.join(", ") + ")"); });
 process.on("SIGINT", function () { dirty = true; try { fs.writeFileSync(DATA_FILE, JSON.stringify(store)); } catch (e) {} process.exit(0); });
-process.on("SIGTERM", function () { try { fs.writeFileSync(DATA_FILE, JSON.stringify(store)); } catch (e) {} process.exit(0); });
+process.on("SIGTERM", function () { try { fs.writeFileSync(DATA_FILE, JSON.stringify(store)); } catch (e) {} saveMongo(store); setTimeout(function () { process.exit(0); }, 300); });

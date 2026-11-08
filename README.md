@@ -32,7 +32,9 @@ Variabili utili:
 | Variabile | Default | Significato |
 | --- | --- | --- |
 | `PORT` | `8080` | Porta HTTP (Render la imposta da solo) |
-| `DATA_FILE` | `gd-data.json` | File in cui il server salva account, livelli e progressi |
+| `DATA_FILE` | `gd-data.json` | File in cui il server salva account, livelli e progressi (usato quando non c'è database) |
+| `MONGODB_URI` | — | Stringa di connessione MongoDB Atlas: se impostata, account, livelli e progressi vivono nel database e sopravvivono a deploy e riavvii |
+| `MONGODB_DB` | `geometrydash` | Nome del database MongoDB da usare |
 | `ADMINS` | `gattoitaliano` | Nomi utente con permessi admin, separati da virgola |
 
 ## Deploy su Render - Opzione A: Blueprint (consigliata)
@@ -63,9 +65,15 @@ di conseguenza `render.yaml`.
 
 - **Il piano free va in sleep** dopo circa 15 minuti senza traffico: la prima richiesta dopo la
   pausa richiede 30-60 secondi (cold start).
-- **Il disco di Render free è effimero**: `gd-data.json` viene perso a ogni deploy o riavvio del
-  servizio. Per conservare account e livelli servono un Render Disk (piano a pagamento, con
-  `DATA_FILE` puntato al mount, ad esempio `/var/data/gd-data.json`) oppure un database esterno.
+- **Persistenza**: con `MONGODB_URI` impostata account, livelli e progressi restano nel database
+  e sopravvivono a deploy, riavvii e sleep. Senza quella variabile il server usa `gd-data.json`,
+  che sul piano free di Render è effimero (si perde a ogni deploy).
+
+  Per attivarla: crea un cluster gratuito su MongoDB Atlas, aggiungi un utente del database,
+  consenti l'accesso da `0.0.0.0/0` (Render free usa IP in uscita variabili) e copia la stringa
+  `mongodb+srv://...`. Poi, nella dashboard di Render → servizio `geometry-dash-web-italia` →
+  **Environment**, aggiungi `MONGODB_URI` con quel valore e rilancia il deploy. Al primo avvio il
+  server carica nel database i dati eventualmente già presenti in `gd-data.json`.
 - `index.html` pesa circa 5 MB: il server lo comprime in brotli/gzip, quindi il download reale è
   intorno a 0,8 MB. Se metti un CDN davanti, lascia passare `Accept-Encoding`.
 - Se in futuro separi gioco e API su due domini diversi, il client accetta `window.GD_SERVER`
