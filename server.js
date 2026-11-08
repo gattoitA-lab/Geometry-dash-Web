@@ -264,14 +264,16 @@ function connectMongo() {
     .then(function () { mongoClient = client; mongoColl = client.db(MONGO_DB).collection("state"); return mongoColl.findOne({ _id: "gd" }); })
     .then(function (doc) {
       if (doc && doc.data && typeof doc.data === "object") {
-        store = doc.data;  store = core.getDb();
-store.tokens = store.tokens || {};
-connectMongo();
+        store = doc.data;
+        core = makeCore();
+        store = core.getDb();
+        store.tokens = store.tokens || {};
         dirty = false;
         console.log("[db] dati caricati da MongoDB: " + Object.keys(store.users || {}).length + " account, " + (store.levels || []).length + " livelli");
       } else {
         dirty = true;
         console.log("[db] MongoDB vuoto: carico i dati locali nel database");
+        saveMongo(store);
       }
       storageMode = "mongo";
     })
@@ -293,21 +295,25 @@ function flush() {
   });
 }
 setInterval(flush, 2000);
-var core = GDCore({
-  admins: ADMIN_LIST,
-  load: function () { return store; },
-  save: function (db) { store = db; dirty = true; },
-  session: function () { return curUser; },
-  setSession: function () {},
-  authBody: function (u) {
-    var t = crypto.randomBytes(24).toString("hex");
-    store.tokens = store.tokens || {};
-    store.tokens[t] = u.user_id; dirty = true;
-    return { user_id: u.user_id, username: u.username, token: t };
-  }
-});
+function makeCore() {
+  return GDCore({
+    admins: ADMIN_LIST,
+    load: function () { return store; },
+    save: function (db) { store = db; dirty = true; },
+    session: function () { return curUser; },
+    setSession: function (id) { curUser = id; },
+    authBody: function (u) {
+      var t = crypto.randomBytes(24).toString("hex");
+      store.tokens = store.tokens || {};
+      store.tokens[t] = u.user_id; dirty = true;
+      return { user_id: u.user_id, username: u.username, token: t };
+    }
+  });
+}
+var core = makeCore();
 store = core.getDb();
 store.tokens = store.tokens || {};
+connectMongo();
 
 /* ---------- lobby ---------- */
 var lobbies = {}; /* solo in memoria */
