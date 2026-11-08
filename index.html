@@ -82592,6 +82592,7 @@ var Engine = (function () {
         this.mp = opts.mp || null;
         this.practice = !!opts.practice;
         this.bg = this.bgTarget = data.settings.bg;
+    this.noBg = !!data.settings.noBg;
         this.ground = this.groundTarget = data.settings.ground;
         var coins = data.objects.map(function (o, i) { return ({
             o: o,
@@ -82819,6 +82820,7 @@ var Engine = (function () {
             false
         ];
         this.bg = this.bgTarget = st.bg;
+        this.noBg = !!st.noBg;
         this.ground = this.groundTarget = st.ground;
         this.camY = this.bounds ? this.bounds.floor - .5 : -2;
         this.time = 0;
@@ -82948,6 +82950,7 @@ var Engine = (function () {
         var br = new Set(s.broken);
         this.objs.forEach(function (o) { return o.broken = br.has(o.i) && o.def.kind !== "coin"; });
         this.bg = this.bgTarget = s.bg;
+        this.noBg = !!s.noBg;
         this.ground = this.groundTarget = s.ground;
         this.camY = s.camY;
         this.fx = __assign({}, (s.fx || {}));
@@ -83813,6 +83816,21 @@ var Engine = (function () {
             if (p.grav === -1)
                 p.onGround = true;
         }
+        if (this.maxTop === undefined) {
+            var mt = 0;
+            for (var qi = 0; qi < this.objs.length; qi++) {
+                var qo = this.objs[qi];
+                if (!qo.def || qo.def.kind === "trigger" || qo.def.kind === "decor")
+                    continue;
+                mt = Math.max(mt, qo.y + (qo.def.h || 1));
+            }
+            this.maxTop = Math.max(8, mt + 2);
+        }
+        if (p.y > this.maxTop) {
+            p.y = this.maxTop;
+            if (p.vy > 0)
+                p.vy = 0;
+        }
         if (!this.bounds && p.y > 45)
             return this.die();
         if (p.dash && p.onGround && !wasGround)
@@ -84278,7 +84296,12 @@ var Engine = (function () {
             ctx.scale(k === 0 ? .001 : k, 1);
             ctx.translate(-W / 2, 0);
         }
-        drawBackdrop(ctx, W, H, u, camX, this.bg, sy(this.bounds ? this.bounds.floor : 0), beat, this.time);
+        if (this.noBg) {
+            ctx.fillStyle = "#0b0e14";
+            ctx.fillRect(0, 0, W, H);
+        }
+        else
+            drawBackdrop(ctx, W, H, u, camX, this.bg, sy(this.bounds ? this.bounds.floor : 0), beat, this.time);
         if (this.gradA > .001) {
             var gg_1 = ctx.createLinearGradient(0, 0, 0, H);
             gg_1.addColorStop(0, this.grad1);
@@ -97547,7 +97570,8 @@ function gdDecodeLevel(str, defs) {
         var a = parts[i].split(","), K = {};
         for (var j = 0; j + 1 < a.length; j += 2)
             K[a[j]] = a[j + 1];
-        var t = GD_REV[K[1]] || (GD_PH[K[1]] ? "gd_" + K[1] : null);
+        var idn = parseInt(K[1], 10);
+        var t = GD_REV[K[1]] || (isFinite(idn) && idn > 0 ? "gd_" + idn : null);
         if (!t) {
             skipped++;
             continue;
@@ -97731,9 +97755,40 @@ function gdDecodeLevel(str, defs) {
     }
     return { settings: settings, objects: objects, skipped: skipped };
 }
+function gdGunzip(bytes) {
+    if (!bytes || bytes.length < 18 || bytes[0] !== 0x1f || bytes[1] !== 0x8b)
+        return null;
+    var o = 10, fl = bytes[3];
+    if (fl & 4)
+        o += 2 + (bytes[10] | bytes[11] << 8);
+    if (fl & 8) {
+        while (o < bytes.length && bytes[o])
+            o++;
+        o++;
+    }
+    if (fl & 16) {
+        while (o < bytes.length && bytes[o])
+            o++;
+        o++;
+    }
+    if (fl & 2)
+        o += 2;
+    try {
+        return gdInflateRaw(bytes, o);
+    }
+    catch (e) {
+        return null;
+    }
+}
 function gdParseFile(u8, defs) {
     var songRef = null;
     var txt = gdStr(u8).replace(/^﻿/, "").replace(/^\xEF\xBB\xBF/, "");
+    var b64all = txt.replace(/\s+/g, "");
+    if (b64all.length > 64 && /^[A-Za-z0-9+\/\-_=]+$/.test(b64all)) {
+        var gzAll = gdGunzip(gdB64d(b64all));
+        if (gzAll)
+            return gdParseFile(gzAll, defs);
+    }
     var name = "", desc = "";
     var t0 = txt.replace(/^\s+/, "");
     if (t0.charAt(0) === "{") {
@@ -97767,8 +97822,11 @@ function gdParseFile(u8, defs) {
         raw = lv;
     else if (lv.charCodeAt(0) === 0x1f && lv.charCodeAt(1) === 0x8b)
         raw = gdStr(gdUnpack(gdBytes(lv)));
-    else
-        raw = gdStr(gdUnpack(gdB64d(lv)));
+    else {
+        var k4b = gdB64d(lv);
+        var k4g = gdGunzip(k4b);
+        raw = gdStr(k4g || gdUnpack(k4b));
+    }
     if (/^\s*[<{]/.test(raw))
         return gdParseFile(gdBytes(raw), defs);
     if (!/^k/.test(raw)) {
@@ -98505,7 +98563,7 @@ function Editor() {
             var c = cam.current;
             var sx = function (x) { return (x - c.x) * u; };
             var sy = function (y) { return H - (y - c.y) * u; };
-            ctx.fillStyle = (_a = d === null || d === void 0 ? void 0 : d.settings.bg) !== null && _a !== void 0 ? _a : "#2850d8";
+            ctx.fillStyle = d && d.settings && d.settings.noBg ? "#0b0e14" : ((_a = d === null || d === void 0 ? void 0 : d.settings.bg) !== null && _a !== void 0 ? _a : "#2850d8");
             ctx.fillRect(0, 0, W, H);
             ctx.fillStyle = "rgba(0,0,0,0.45)";
             ctx.fillRect(0, 0, W, H);
@@ -99914,6 +99972,16 @@ function Editor() {
                                             "x-source-type": "computed",
                                             "x-source-editable": "false",
                                             children: [t("bgColor"), _jsxDEV("input", {
+                                                    type: "checkbox",
+                                                    title: "Sfondo vuoto (nessun decoro)",
+                                                    checked: !!data.settings.noBg,
+                                                    onChange: function (e) { return setSettings({ noBg: e.target.checked }); },
+                                                    "data-testid": "editor-settings-nobg"
+                                                }, void 0, false, {
+                                                    fileName: _jsxFileName,
+                                                    lineNumber: 634,
+                                                    columnNumber: 100
+                                                }, this), _jsxDEV("input", {
                                                     type: "color",
                                                     value: data.settings.bg,
                                                     onChange: function (e) { return setSettings({ bg: e.target.value }); },
