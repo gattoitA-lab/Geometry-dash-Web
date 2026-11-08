@@ -97175,6 +97175,30 @@ GD_REV[291] = "slope";
 GD_REV[1708] = "spikeball";
 GD_REV[899] = "trigger_color";
 GD_REV[1814] = "trigger_follow";
+// Catalogo GD: aggiunge alla tavolozza gli oggetti reali delle famiglie note.
+// Il nome "gd_<id>" fa sì che import ed export usino direttamente l'ID originale.
+(function () {
+    var gdRange = function (a, b) { var r = []; for (var i = a; i <= b; i++) r.push(i); return r; };
+    var mod = __GD52__1;
+    var seen = {};
+    for (var name in GD_ID) seen[GD_ID[name]] = 1;
+    var add = function (ids, kind, cat, w, h, color, en, it) {
+        for (var i = 0; i < ids.length; i++) {
+            var n = ids[i];
+            if (seen[n]) continue;
+            seen[n] = 1;
+            mod.OBJECTS.push({ id: "gd_" + n, kind: kind, cat: cat, w: w, h: h, color: color, en: en + " (ID " + n + ")", it: it + " (ID " + n + ")" });
+        }
+    };
+    add(gdRange(1, 7).concat(gdRange(76, 82), gdRange(160, 169), gdRange(247, 254), gdRange(1140, 1150)), "solid", "gd", 1, 1, "#ffffff", "Block", "Blocco");
+    add([40, 1903], "solid", "gd", 1, .5, "#ffffff", "Slab", "Lastra");
+    add([289, 291, 299, 301, 309, 311, 315, 317, 321, 323, 331, 333, 337, 339, 343, 345, 349, 351, 353, 355, 371, 372, 373, 374, 483, 484, 492, 493, 651, 652, 665, 666, 709, 710, 711, 712, 726, 727, 728, 729, 886, 887, 1338, 1339, 1743, 1744, 1745, 1746, 1747, 1748, 1749, 1750], "slope", "gd", 1, 1, "#ffffff", "Slope", "Pendenza");
+    add([8, 61], "hazard", "gd", 1, 1, "#ffffff", "Spike", "Spina");
+    add([9, 39, 103, 1715, 1719, 1889, 1890, 1891, 1910, 1911], "hazard", "gd", 1, .5, "#ffffff", "Small spike", "Spina piccola");
+    add([88, 89, 98, 1705, 1706, 1707, 675, 676, 677], "saw", "gd", 1, 1, "#cfd8ff", "Saw", "Sega");
+    add(gdRange(123, 128).concat(gdRange(406, 408), gdRange(461, 466), [142, 725]), "deco", "gd", 1, 1, "#ffffff", "Decoration", "Decorazione");
+    mod.DEF = Object.fromEntries(mod.OBJECTS.map(function (o) { return [o.id, o]; }));
+})();
 var GD_SPEEDOUT = [1, 0, 2, 3, 4];
 var GD_SPEEDIN = { 0: 1, 1: 0, 2: 2, 3: 3, 4: 4 };
 var GD_EASE_OUT = { linear: 0, inout: 1, in: 2, out: 3, bounce: 6 };
@@ -97388,7 +97412,7 @@ function gdEncodeLevel(data, defs) {
             var o = _2.value;
             if (o.t === "portal_tp_out")
                 continue;
-            var id = GD_ID[o.t] || (o.t.indexOf("gd_") === 0 ? parseInt(o.t.slice(3), 10) : 0);
+            var id = o.gid || GD_ID[o.t] || (o.t.indexOf("gd_") === 0 ? parseInt(o.t.slice(3), 10) : 0);
             if (!id) {
                 lost++;
                 lostTypes[o.t] = 1;
@@ -97600,6 +97624,9 @@ function gdDecodeLevel(str, defs) {
         deg += q * 90;
         deg = ((deg % 360) + 360) % 360;
         var o = { t: t, x: x, y: y };
+        var canon = GD_ID[t];
+        if (canon !== undefined && String(canon) !== String(K[1]))
+            o.gid = idn;
         if (t.indexOf("gd_") === 0) {
             var sc = parseFloat(K[32]);
             if (sc && sc !== 1)
