@@ -81311,6 +81311,20 @@ function drawObject(ctx, o, px, py, u, opt) {
         return;
     if (def.kind === "trigger" && !opt.editor)
         return;
+    if (o.noDraw && !opt.editor)
+        return;
+    if (o.ph && !opt.editor) {
+        var chs = u * .42 * (o.sc || 1) * (o.sx || 1);
+        var chh = u * .42 * (o.sc || 1) * (o.sy || 1);
+        ctx.save();
+        ctx.translate(px + Math.max(def.w, 1) * u / 2, py - Math.max(def.h, 1) * u / 2);
+        ctx.rotate(((o.r || 0) + (o.a || 0) / 90) * Math.PI / 2);
+        ctx.globalAlpha *= .8;
+        ctx.fillStyle = o.color || "#9aa4b2";
+        ctx.fillRect(-chs / 2, -chh / 2, chs, chh);
+        ctx.restore();
+        return;
+    }
     var W = Math.max(def.w, 1) * u;
     var H = Math.max(def.h, 1) * u;
     var w = def.w * u;
@@ -97619,6 +97633,7 @@ function gdDecodeLevel(str, defs) {
         for (var j = 0; j + 1 < a.length; j += 2)
             K[a[j]] = a[j + 1];
         var idn = parseInt(K[1], 10);
+        var known = !!GD_REV[K[1]];
         var t = GD_REV[K[1]] || (isFinite(idn) && idn > 0 ? "gd_" + idn : null);
         if (!t) {
             skipped++;
@@ -97805,6 +97820,10 @@ function gdDecodeLevel(str, defs) {
             o.v = Math.round((parseFloat(K[120]) || 1) * 100);
         if (K[62] === "1" && def.kind === "trigger")
             o.sp = true;
+        if (!known && idn >= 1000 && idn <= 2999)
+            o.noDraw = 1;
+        if (def.kind === "decor")
+            o.ph = 1;
         objects.push(o);
         if (K[1] === "747") {
             var off = parseFloat(K[54]) || 0;
