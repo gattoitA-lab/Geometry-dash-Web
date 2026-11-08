@@ -2,6 +2,96 @@
 <html lang="it" class="dark">
 <head>
 <script>window.GD_SERVER = "https://geometry-dash-web-italia.onrender.com";</script>
+<script>
+(function () {
+  "use strict";
+  /* Qualita' automatica: misura gli fps reali e regola risoluzione ed effetti.
+     - livello 2 (alta): fino a 3x pixel ratio, ombre piene
+     - livello 1 (media): fino a 1.5x, ombre attenuate
+     - livello 0 (bassa): 1x, ombre disattivate
+     Override manuale: window.__gdSetQuality("auto" | "alta" | "media" | "bassa") */
+  var LS_KEY = "gd-quality";
+  var MODES = { auto: -1, bassa: 0, media: 1, alta: 2 };
+  var state = { mode: "auto", level: 2, fps: 60, auto: true };
+
+  var proto = window.CanvasRenderingContext2D && window.CanvasRenderingContext2D.prototype;
+  if (proto) {
+    try {
+      var desc = Object.getOwnPropertyDescriptor(proto, "shadowBlur");
+      if (desc && desc.set && desc.get) {
+        Object.defineProperty(proto, "shadowBlur", {
+          configurable: true,
+          enumerable: desc.enumerable,
+          get: function () { return desc.get.call(this); },
+          set: function (v) {
+            var lvl = state.level;
+            if (lvl <= 0) desc.set.call(this, 0);
+            else if (lvl === 1) desc.set.call(this, Math.min(v, 8));
+            else desc.set.call(this, v);
+          }
+        });
+      }
+    } catch (e) {}
+  }
+
+  function readMode() {
+    try {
+      var m = localStorage.getItem(LS_KEY);
+      return m && MODES[m] !== undefined ? m : "auto";
+    } catch (e) {
+      return "auto";
+    }
+  }
+
+  state.mode = readMode();
+  if (state.mode !== "auto") {
+    state.auto = false;
+    state.level = MODES[state.mode];
+  }
+
+  window.__gdDprCap = function () {
+    return state.level >= 2 ? 3 : state.level === 1 ? 1.5 : 1;
+  };
+  window.__gdFx = function () {
+    return state.level >= 1;
+  };
+  window.__gdQualityInfo = function () {
+    return { mode: state.mode, level: state.level, fps: Math.round(state.fps), cap: window.__gdDprCap() };
+  };
+  window.__gdSetQuality = function (mode) {
+    var m = MODES[mode] === undefined ? "auto" : mode;
+    try { localStorage.setItem(LS_KEY, m); } catch (e) {}
+    state.mode = m;
+    state.auto = m === "auto";
+    if (!state.auto) state.level = MODES[m];
+    return window.__gdQualityInfo();
+  };
+
+  var frames = 0;
+  var t0 = performance.now();
+  var slow = 0;
+  var fast = 0;
+  function tick(now) {
+    frames++;
+    var dt = now - t0;
+    if (dt >= 1000) {
+      var fps = frames * 1000 / dt;
+      state.fps = state.fps ? state.fps * 0.5 + fps * 0.5 : fps;
+      frames = 0;
+      t0 = now;
+      if (state.auto) {
+        if (fps < 40) { slow++; fast = 0; }
+        else if (fps >= 57) { slow = 0; fast++; }
+        else { slow = 0; fast = 0; }
+        if (slow >= 2 && state.level > 0) { state.level--; slow = 0; }
+        else if (fast >= 4 && state.level < 2) { state.level++; fast = 0; }
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
 <meta charset="UTF-8">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMDBmMGZmIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjN2EzY2ZmIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMwYjEwMzAiLz48cmVjdCB4PSIxNCIgeT0iMTQiIHdpZHRoPSIzNiIgaGVpZ2h0PSIzNiIgcng9IjUiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIzIi8+PHJlY3QgeD0iMjIiIHk9IjI0IiB3aWR0aD0iNyIgaGVpZ2h0PSI3IiByeD0iMS41IiBmaWxsPSIjMGIxMDMwIi8+PHJlY3QgeD0iMzUiIHk9IjI0IiB3aWR0aD0iNyIgaGVpZ2h0PSI3IiByeD0iMS41IiBmaWxsPSIjMGIxMDMwIi8+PHJlY3QgeD0iMjIiIHk9IjM4IiB3aWR0aD0iMjAiIGhlaWdodD0iNCIgcng9IjIiIGZpbGw9IiMwYjEwMzAiLz48L3N2Zz4=">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -84683,8 +84773,11 @@ function GameCanvas(_a) {
             onCheckpoint: function (n) { return setCps(n); }
         });
         engRef.current = eng;
+        var capUsed = 0;
         var resize = function () {
-            var dpr = Math.min(2, window.devicePixelRatio || 1);
+            var cap = window.__gdDprCap ? window.__gdDprCap() : 2;
+            capUsed = cap;
+            var dpr = Math.min(cap, window.devicePixelRatio || 1);
             cv.width = cv.clientWidth * dpr;
             cv.height = cv.clientHeight * dpr;
         };
@@ -84696,6 +84789,8 @@ function GameCanvas(_a) {
         var loop = function (now) {
             var dt = (now - last) / 1e3;
             last = now;
+            if (window.__gdDprCap && window.__gdDprCap() !== capUsed)
+                resize();
             if (!pausedRef.current)
                 eng.update(dt);
             eng.render(ctx, cv.width, cv.height);
@@ -98397,7 +98492,8 @@ function Editor() {
         var t0 = performance.now();
         var frame = function () {
             var _a, _b, _d, _e, _f, _g, _h;
-            var dpr = Math.min(2, window.devicePixelRatio || 1);
+            var qcap = window.__gdDprCap ? window.__gdDprCap() : 2;
+            var dpr = Math.min(qcap, window.devicePixelRatio || 1);
             if (cv.width !== Math.round(cv.clientWidth * dpr) || cv.height !== Math.round(cv.clientHeight * dpr)) {
                 cv.width = Math.round(cv.clientWidth * dpr);
                 cv.height = Math.round(cv.clientHeight * dpr);
