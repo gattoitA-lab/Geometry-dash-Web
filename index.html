@@ -82649,6 +82649,7 @@ var Engine = (function () {
             false
         ];
         this.checkpoints = [];
+        this.startPos = null;
         this.lastCp = 0;
         this.camY = -2;
         this.particles = [];
@@ -82961,6 +82962,8 @@ var Engine = (function () {
         this.applyGroups();
         __GD47__1.audio.setMusicVol(1);
         __GD47__1.audio.play(this.song);
+        if (this.practice && this.startPos && !first)
+            this.restore(this.startPos, true);
     };
     Object.defineProperty(Engine.prototype, "percent", {
         get: function () {
@@ -83009,6 +83012,7 @@ var Engine = (function () {
     Engine.prototype.setPractice = function (on) {
         this.practice = on;
         this.checkpoints = [];
+        this.startPos = null;
         this.reset();
     };
     Engine.prototype.snapshot = function () {
@@ -83049,7 +83053,21 @@ var Engine = (function () {
         this.checkpoints.pop();
         (_b = (_a = this.opts).onCheckpoint) === null || _b === void 0 ? void 0 : _b.call(_a, this.checkpoints.length);
     };
-    Engine.prototype.restore = function (s) {
+    Engine.prototype.setStartPos = function () {
+        var _a, _b;
+        if (!this.practice || this.state !== "playing")
+            return false;
+        this.startPos = this.snapshot();
+        this.checkpoints = [];
+        this.lastCp = this.time;
+        (_b = (_a = this.opts).onCheckpoint) === null || _b === void 0 ? void 0 : _b.call(_a, 0);
+        __GD47__1.audio.sfx("checkpoint");
+        return true;
+    };
+    Engine.prototype.clearStartPos = function () {
+        this.startPos = null;
+    };
+    Engine.prototype.restore = function (s, keepAttempt) {
         this.players = s.players.map(function (p) { return (__assign({}, p)); });
         this.speed = s.speed;
         this.bounds = s.bounds ? __assign({}, s.bounds) : null;
@@ -83085,7 +83103,8 @@ var Engine = (function () {
         this.trails = [[], []];
         this.state = "playing";
         this.stateTime = 0;
-        this.attempts++;
+        if (!keepAttempt)
+            this.attempts++;
         this.lastCp = this.time;
     };
     Engine.prototype.respawn = function () {
@@ -84624,6 +84643,9 @@ var DICT = {
     guestNote: ["Da ospite i progressi restano in questo browser. Accedi per salvarli nel tuo account.", "As a guest your progress stays in this browser. Log in to save it to your account."],
     normal: ["Normale", "Normal"],
     practice: ["Pratica", "Practice"],
+    startPos: ["Start Pos", "Start Pos"],
+    startPosHint: ["Imposta il punto di partenza qui", "Set the start position here"],
+    startPosClear: ["Rimuovi il punto di partenza", "Clear the start position"],
     normalMode: ["Modalità normale", "Normal mode"],
     practiceMode: ["Modalità pratica", "Practice mode"],
     attempt: ["Tentativo", "Attempt"],
@@ -84878,6 +84900,7 @@ function GameCanvas(_a) {
     var _g = __read(useState(!!startPractice), 2), practice = _g[0], setPractice = _g[1];
     var _h = __read(useState(null), 2), done = _h[0], setDone = _h[1];
     var _j = __read(useState(0), 2), cps = _j[0], setCps = _j[1];
+    var _sp = __read(useState(false), 2), hasStart = _sp[0], setHasStart = _sp[1];
     var cb = useRef({
         onDeath: onDeath,
         onComplete: onComplete
@@ -84996,14 +85019,31 @@ function GameCanvas(_a) {
         eng.checkpoints = [];
         setCps(0);
         eng.reset();
+        setHasStart(!!eng.startPos);
         if (pausedRef.current)
             togglePause();
+    };
+    var setStart = function () {
+        var eng = engRef.current;
+        if (!eng)
+            return;
+        if (eng.setStartPos())
+            setCps(0);
+        setHasStart(!!eng.startPos);
+    };
+    var clearStart = function () {
+        var eng = engRef.current;
+        if (!eng)
+            return;
+        eng.clearStartPos();
+        setHasStart(false);
     };
     var switchPractice = function () {
         var eng = engRef.current;
         eng.setPractice(!eng.practice);
         setPractice(eng.practice);
         setCps(0);
+        setHasStart(false);
         if (pausedRef.current)
             togglePause();
     };
@@ -85246,6 +85286,37 @@ function GameCanvas(_a) {
                     }, void 0, true, {
                         fileName: _jsxFileName,
                         lineNumber: 181,
+                        columnNumber: 11
+                    }, this),
+                    _jsxDEV("button", {
+                        className: "flex items-center gap-1.5 rounded-xl border px-3 py-2 font-semibold backdrop-blur-md active:scale-95 transition-transform duration-150 ".concat(hasStart ? "border-[#ffe600] bg-[#ffe600]/20 text-[#ffe600]" : "border-[#ffe600]/60 bg-black/60 text-[#ffe600]"),
+                        title: t("startPosHint"),
+                        onClick: setStart,
+                        "data-testid": "practice-start-pos",
+                        "x-file-name": "GameCanvas",
+                        "x-line-number": "157",
+                        "x-column": "10",
+                        "x-component": "button",
+                        "x-id": "GameCanvas_start_pos",
+                        "x-dynamic": "true",
+                        "x-source-type": "state",
+                        "x-source-var": "hasStart",
+                        "x-source-editable": "false",
+                        children: [hasStart ? "✓ " : "\u2691 ", t("startPos")]
+                    }, void 0, true, {
+                        fileName: _jsxFileName,
+                        lineNumber: 186,
+                        columnNumber: 11
+                    }, this),
+                    hasStart && _jsxDEV("button", {
+                        className: "rounded-xl border border-[#ffe600]/40 bg-black/60 px-2.5 py-2 text-[#ffe600] backdrop-blur-md active:scale-95 transition-transform duration-150",
+                        title: t("startPosClear"),
+                        onClick: clearStart,
+                        "data-testid": "practice-clear-start-pos",
+                        children: "✕"
+                    }, void 0, false, {
+                        fileName: _jsxFileName,
+                        lineNumber: 187,
                         columnNumber: 11
                     }, this),
                     _jsxDEV("span", {
