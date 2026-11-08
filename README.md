@@ -10,6 +10,16 @@ livelli online, classifiche, progressi e lobby multiplayer.
 | `package.json` | Script `start` (`node server.js`) |
 | `render.yaml` | Blueprint Render: web service Node, piano free, health check su `/ping` |
 
+## Dove è pubblicato
+
+- **Gioco (pagina)**: <https://gattoita-lab.github.io/Geometry-dash-Web/> - GitHub Pages, branch `main`, root del repo.
+- **Server / API**: <https://geometry-dash-web-italia.onrender.com> - servizio Render creato dal Blueprint.
+
+`index.html` contiene la riga `window.GD_SERVER = "https://geometry-dash-web-italia.onrender.com"`:
+la pagina gira su GitHub Pages e le funzioni online (account, livelli online, lobby) chiamano le API su
+Render, che risponde con CORS aperto. Se togli quella riga il gioco gira solo in locale, senza account,
+livelli online e lobby.
+
 ## In locale
 
 ```bash
