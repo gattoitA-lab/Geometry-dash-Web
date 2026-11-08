@@ -82703,11 +82703,9 @@ var Engine = (function () {
         this.mp = opts.mp || null;
         this.practice = !!opts.practice;
         this.startSpawn = null;
-        if (this.practice) {
-            var spObjs = data.objects.filter(function (o) { return o.t === "startpos"; }).sort(function (a, b) { return a.x - b.x; });
-            if (spObjs.length)
-                this.startSpawn = { x: spObjs[0].x, y: spObjs[0].y };
-        }
+        var spObjs = data.objects.filter(function (o) { return o.t === "startpos"; }).sort(function (a, b) { return a.x - b.x; });
+        if (spObjs.length)
+            this.startSpawn = { x: spObjs[0].x, y: spObjs[0].y };
         this.bg = this.bgTarget = data.settings.bg;
     this.noBg = !!data.settings.noBg;
         this.ground = this.groundTarget = data.settings.ground;
@@ -100394,6 +100392,7 @@ function Editor() {
                 title: name,
                 icons: (0, __GD39__1.iconColors)(progress === null || progress === void 0 ? void 0 : progress.icons),
                 allowPractice: test.mode === "test",
+                startPractice: test.mode === "test" && (test.data.objects || []).some(function (o) { return o.t === "startpos"; }),
                 badge: test.mode === "verify" ? t("verifying") : t("testing"),
                 onExit: function () { return setTest(null); },
                 onComplete: function (r) { return void onVerifyComplete(r); },
