@@ -1039,19 +1039,102 @@ if (typeof module !== "undefined")
             localStorage.setItem(k, v);
     }
     catch (e) { } }
-    var SERVER = "";
+    var SERVER = "", EXPLICIT = false;
     try {
         var q = /[?&]server=([^&#]*)/.exec(location.search);
-        if (q)
+        if (q) {
             lsSet("gd-server", decodeURIComponent(q[1]));
+            EXPLICIT = true;
+        }
     }
     catch (e) { }
-    SERVER = (lsGet("gd-server") || window.GD_SERVER || "").replace(/\/+$/, "");
-    window.__gdServer = SERVER;
-    window.__gdSetServer = function (v) { lsSet("gd-server", v ? String(v).replace(/\/+$/, "") : null); try {
-        location.reload();
+    var PICKED = lsGet("gd-server");
+    SERVER = (PICKED === null ? (window.GD_SERVER || "") : PICKED).replace(/\/+$/, "");
+    var isLocalPage = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || location.protocol === "file:";
+    var hostOf = function (u) { try {
+        return new URL(u, location.href).host;
     }
-    catch (e) { } };
+    catch (e) {
+        return "";
+    } };
+    window.__gdServer = SERVER;
+    window.__gdSetServer = function (v) {
+        var s = v ? String(v).replace(/\/+$/, "") : "";
+        lsSet("gd-server", s);
+        if (s)
+            lsSet("gd-remote", s);
+        lsSet("gd-local-auto", null);
+        try {
+            location.reload();
+        }
+        catch (e) { }
+    };
+    /* Se il server condiviso non ha un database, account e accesso si perdono a ogni
+       riavvio: in quel caso si puo' passare alla memoria di questo browser. */
+    window.__gdStoreMode = function (u, mode) {
+        if (!u || isLocalPage || hostOf(u) === location.host)
+            return;
+        if (mode === "local") {
+            lsSet("gd-remote", u);
+            lsSet("gd-server", "");
+            lsSet("gd-local-auto", "1");
+            try {
+                location.reload();
+            }
+            catch (e) { }
+        }
+    };
+    var showNote = function (msg, btn, fn) {
+        var add = function () {
+            if (!document.body || document.getElementById("gd-store-note"))
+                return;
+            var d = document.createElement("div");
+            d.id = "gd-store-note";
+            d.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:2147483000;background:rgba(5,10,20,.96);border:1px solid rgba(0,240,255,.55);border-radius:12px;padding:10px 14px;color:#fff;font:600 13px/1.4 sans-serif;text-align:center";
+            d.appendChild(document.createTextNode(msg + " "));
+            if (btn) {
+                var b = document.createElement("button");
+                b.style.cssText = "margin-left:8px;border:0;border-radius:8px;padding:6px 10px;font-weight:700;background:#00f0ff;color:#000;cursor:pointer";
+                b.textContent = btn;
+                b.onclick = fn;
+                d.appendChild(b);
+            }
+            document.body.appendChild(d);
+        };
+        if (document.readyState === "loading")
+            document.addEventListener("DOMContentLoaded", add);
+        else
+            add();
+    };
+    var storeProbe = function (u, checkLocal) {
+        NATIVE(u + "/ping", { cache: "no-store" }).then(function (r) {
+            return r.json();
+        }).then(function (j) {
+            if (!j || !j.storage)
+                return;
+            if (checkLocal) {
+                if (j.storage === "mongo") {
+                    showNote("Il server ora ha un database: puoi usare di nuovo l'account condiviso.", "Usa il server", function () { window.__gdSetServer(lsGet("gd-remote") || ""); });
+                    return;
+                }
+                return;
+            }
+            if (j.storage === "mongo")
+                return;
+            var tok = lsGet("gd-token");
+            return NATIVE(u + "/api/auth/me", { headers: tok ? { "Authorization": "Bearer " + tok } : {} }).then(function (r) {
+                if (!(tok && r.ok))
+                    showNote("Il server condiviso non conserva gli account: l'accesso si perde a ogni riavvio. Salviamolo in questo browser.", "Salva in questo browser", function () { window.__gdStoreMode(u, "local"); });
+            });
+        }).catch(function () { });
+    };
+    if (SERVER && !EXPLICIT && !isLocalPage && hostOf(SERVER) !== location.host)
+        storeProbe(SERVER, false);
+    if (!SERVER && lsGet("gd-local-auto") === "1" && !isLocalPage) {
+        var remUrl = lsGet("gd-remote");
+        if (remUrl)
+            storeProbe(remUrl, true);
+    }
     if (SERVER) {
         window.fetch = function (input, init) {
             var url = typeof input === "string" ? input : (input && input.url) || "";
