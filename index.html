@@ -81317,7 +81317,7 @@ function drawObject(ctx, o, px, py, u, opt) {
         var chs = u * .42 * (o.sc || 1) * (o.sx || 1);
         var chh = u * .42 * (o.sc || 1) * (o.sy || 1);
         ctx.save();
-        ctx.translate(px + Math.max(def.w, 1) * u / 2, py - Math.max(def.h, 1) * u / 2);
+        ctx.translate(px + Math.max(o.w || def.w, 1) * u / 2, py - Math.max(o.h || def.h, 1) * u / 2);
         ctx.rotate(((o.r || 0) + (o.a || 0) / 90) * Math.PI / 2);
         ctx.globalAlpha *= .8;
         ctx.fillStyle = o.color || "#9aa4b2";
@@ -81325,10 +81325,11 @@ function drawObject(ctx, o, px, py, u, opt) {
         ctx.restore();
         return;
     }
-    var W = Math.max(def.w, 1) * u;
-    var H = Math.max(def.h, 1) * u;
-    var w = def.w * u;
-    var h = def.h * u;
+    var dw = o.w || def.w, dh = o.h || def.h;
+    var W = Math.max(dw, 1) * u;
+    var H = Math.max(dh, 1) * u;
+    var w = dw * u;
+    var h = dh * u;
     ctx.save();
     ctx.translate(px + W / 2, py - H / 2);
     if (opt.rotx)
@@ -81387,15 +81388,15 @@ function drawObject(ctx, o, px, py, u, opt) {
             }
             ctx.strokeStyle = "rgba(255,255,255,0.18)";
             ctx.strokeRect(L + u * .22, B - h + Math.min(u * .22, h * .3), w - u * .44, Math.max(0, h - Math.min(u * .44, h * .6)));
-            if (def.kind !== "deco" && (def.w > 1 || def.h > 1)) {
+            if (def.kind !== "deco" && (dw > 1 || dh > 1)) {
                 ctx.strokeStyle = "rgba(255,255,255,0.12)";
                 ctx.lineWidth = lw * .6;
                 ctx.beginPath();
-                for (var gi = 1; gi < def.w - 1e-6; gi++) {
+                for (var gi = 1; gi < dw - 1e-6; gi++) {
                     ctx.moveTo(L + gi * u, B - h);
                     ctx.lineTo(L + gi * u, B);
                 }
-                for (var gj = 1; gj < def.h - 1e-6; gj++) {
+                for (var gj = 1; gj < dh - 1e-6; gj++) {
                     ctx.moveTo(L, B - gj * u);
                     ctx.lineTo(L + w, B - gj * u);
                 }
@@ -82220,8 +82221,12 @@ function localBox(def) {
     ];
 }
 function worldBox(o, def) {
-    var W = Math.max(def.w, 1), H = Math.max(def.h, 1);
+    var W = Math.max(o.w || def.w, 1), H = Math.max(o.h || def.h, 1);
     var lb = localBox(def);
+    if (o.w || o.h) {
+        var kx = W / Math.max(def.w, 1), ky = H / Math.max(def.h, 1);
+        lb = [lb[0] * kx, lb[1] * ky, lb[2] * kx, lb[3] * ky];
+    }
     var cx = W / 2, cy = H / 2;
     var r = ((o.r || 0) % 4 + 4) % 4;
     var pts = [[lb[0], lb[1]], [lb[2], lb[3]]].map(function (_a) {
@@ -83838,7 +83843,7 @@ var Engine = (function () {
                 var qo = this.objs[qi];
                 if (!qo.def || qo.def.kind === "trigger" || qo.def.kind === "decor")
                     continue;
-                mt = Math.max(mt, qo.y + (qo.def.h || 1));
+                mt = Math.max(mt, qo.y + (qo.o.h || qo.def.h || 1));
             }
             this.maxTop = Math.max(8, mt + 2);
         }
@@ -97444,7 +97449,7 @@ function gdEncodeLevel(data, defs) {
                 continue;
             }
             var def = defs[o.t] || { w: 1, h: 1 };
-            var w = Math.max(def.w || 1, 1), h = def.h || 1;
+            var w = Math.max(o.w || def.w || 1, .1), h = o.h || def.h || 1;
             var cx = (o.x + (o.t === "text" || def.kind === "trigger" ? .5 : w / 2)) * 30, cy = (o.y + (def.kind === "trigger" ? .5 : h / 2)) * 30;
             var rot = ((o.r || 0) * 90 + (o.a || 0)) % 360;
             var p = [1, id, 2, gdNum(cx), 3, gdNum(cy)];
@@ -97454,8 +97459,12 @@ function gdEncodeLevel(data, defs) {
                 p.push(32, o.sc);
             if (o.sx)
                 p.push(128, o.sx);
+            else if (o.w && def.w && o.w !== def.w)
+                p.push(128, gdNum(o.w / def.w));
             if (o.sy)
                 p.push(129, o.sy);
+            else if (o.h && def.h && o.h !== def.h)
+                p.push(129, gdNum(o.h / def.h));
             if (o.c1)
                 p.push(21, o.c1);
             if (o.c2)
@@ -97640,7 +97649,9 @@ function gdDecodeLevel(str, defs) {
             continue;
         }
         var def = defs[t] || { w: 1, h: 1 };
-        var w = Math.max(def.w || 1, 1), h = def.h || 1;
+        var xs = parseFloat(K[128]), ys = parseFloat(K[129]);
+        var kx = isFinite(xs) && xs > 0 ? xs : 1, ky = isFinite(ys) && ys > 0 ? ys : 1;
+        var w = Math.max(def.w || 1, 1) * kx, h = (def.h || 1) * ky;
         var gx = parseFloat(K[2]), gy = parseFloat(K[3]);
         if (!isFinite(gx) || !isFinite(gy)) {
             skipped++;
@@ -97667,9 +97678,8 @@ function gdDecodeLevel(str, defs) {
         if (isFinite(cc1) && colors[cc1]) { o.c1 = cc1; o.color = colors[cc1]; }
         var cc2 = parseInt(K[22], 10);
         if (isFinite(cc2) && colors[cc2]) { o.c2 = cc2; o.color2 = colors[cc2]; }
-        var xs = parseFloat(K[128]), ys = parseFloat(K[129]);
-        if (isFinite(xs) && xs !== 0 && xs !== 1) o.sx = Math.round(xs * 1000) / 1000;
-        if (isFinite(ys) && ys !== 0 && ys !== 1) o.sy = Math.round(ys * 1000) / 1000;
+        if (kx !== 1) o.w = Math.round(Math.max(def.w || 1, 1) * kx * 1000) / 1000;
+        if (ky !== 1) o.h = Math.round((def.h || 1) * ky * 1000) / 1000;
         var canon = GD_ID[t];
         if (canon !== undefined && String(canon) !== String(K[1]))
             o.gid = idn;
@@ -98081,6 +98091,7 @@ function SelectionPanel(p) {
     var kids = [];
     kids.push(__h("p", { key: "t", style: { fontWeight: 600, margin: 0 }, "data-testid": "editor-selected-type" }, (lang === "it" ? def.it : def.en) + (count > 1 ? "  +" + (count - 1) : "")));
     kids.push(__h("p", { key: "c", style: __assign(__assign({}, UI.mono), { margin: 0 }) }, "x " + fmt(s.x) + " · y " + fmt(s.y) + " · " + (s.r || 0) * 90 + "°" + (count > 1 ? "  (" + count + " " + T("selezionati", "selected") + ")" : "")));
+    kids.push(__h("div", { key: "dim", style: __assign(__assign({}, UI.row), { marginTop: 4 }), "data-testid": "editor-size" }, __h("label", { style: __assign(__assign({}, UI.label), { margin: 0, width: 74 }) }, T("Larghezza", "Width"), __h("input", { type: "number", min: .1, max: 60, step: .1, value: fmt(s.w || def.w || 1), style: __assign(__assign({}, UI.input), { width: 66 }), onChange: function (e) { return p.updateSel({ w: Math.max(.1, Math.min(60, Number(e.target.value) || def.w || 1)) }); }, "data-testid": "editor-selected-w" })), __h("label", { style: __assign(__assign({}, UI.label), { margin: 0, width: 74 }) }, T("Altezza", "Height"), __h("input", { type: "number", min: .1, max: 60, step: .1, value: fmt(s.h || def.h || 1), style: __assign(__assign({}, UI.input), { width: 66 }), onChange: function (e) { return p.updateSel({ h: Math.max(.1, Math.min(60, Number(e.target.value) || def.h || 1)) }); }, "data-testid": "editor-selected-h" })), __h("button", { type: "button", style: UI.btn, onClick: function () { return p.updateSel({ w: null, h: null }); }, title: T("Dimensioni del tipo", "Type dimensions"), "data-testid": "editor-size-reset" }, "↺")));
     if (s.t === "text")
         kids.push(__h("input", { key: "tx", style: UI.input, value: (_d = s.text) !== null && _d !== void 0 ? _d : "", maxLength: 20, placeholder: T("Testo", "Text"), onChange: function (e) { return p.updateSel({ text: e.target.value }); }, "data-testid": "editor-selected-text-input" }));
     if (colorable)
@@ -98685,7 +98696,7 @@ function Editor() {
                         if ((!U.trig && def.kind === "trigger") || (!U.deco && def.kind === "decor"))
                             return;
                         if (U.hit && def.kind !== "trigger" && def.kind !== "decor") {
-                            var hw = Math.max(def.w, 1), hh = Math.max(def.h, 1);
+                            var hw = Math.max(o.w || def.w, 1), hh = Math.max(o.h || def.h, 1);
                             ctx.save();
                             ctx.lineWidth = 1.5;
                             ctx.strokeStyle = def.kind === "spike" || def.kind === "saw" || def.kind === "hazard" || /spike|thorn|saw/.test(o.t) ? "rgba(255,60,80,.95)" : def.kind === "pad" || def.kind === "orb" ? "rgba(255,230,60,.95)" : "rgba(60,170,255,.95)";
@@ -98693,19 +98704,19 @@ function Editor() {
                             ctx.restore();
                         }
                     }
-                    if (o.x + Math.max(def.w, 1) < c.x - 1 || o.x > c.x + W / u + 1)
+                    if (o.x + Math.max(o.w || def.w, 1) < c.x - 1 || o.x > c.x + W / u + 1)
                         return;
                     (0, __GD53__1.drawObject)(ctx, o, sx(o.x), sy(o.y), u, {
                         t: tm_1,
                         editor: true,
                         alpha: def.kind === "glass" || o.t === "spike_glass" ? .6 : undefined
                     });
-                    if (Array.isArray(o.grp) && o.grp.length) {
+                    if (Array.isArray(o.grp) && o.grp.length && (i === s || live.current.extra.indexOf(i) >= 0 || (selTg_1 !== null && o.grp.indexOf(selTg_1) >= 0))) {
                         ctx.font = "700 10px sans-serif";
                         ctx.textBaseline = "top";
                         ctx.textAlign = "left";
                         var txt = "G" + o.grp.join(",");
-                        var tx = sx(o.x) + 2, ty_1 = sy(o.y + Math.max(def.h, 1)) + 2;
+                        var tx = sx(o.x) + 2, ty_1 = sy(o.y + Math.max(o.h || def.h, 1)) + 2;
                         ctx.fillStyle = "rgba(255,170,0,.92)";
                         ctx.fillRect(tx, ty_1, ctx.measureText(txt).width + 6, 12);
                         ctx.fillStyle = "#000";
@@ -98714,14 +98725,14 @@ function Editor() {
                             ctx.strokeStyle = "#ffaa00";
                             ctx.lineWidth = 2;
                             ctx.setLineDash([5, 3]);
-                            ctx.strokeRect(sx(o.x) - 3, sy(o.y + Math.max(def.h, 1)) - 3, Math.max(def.w, 1) * u + 6, Math.max(def.h, 1) * u + 6);
+                            ctx.strokeRect(sx(o.x) - 3, sy(o.y + Math.max(o.h || def.h, 1)) - 3, Math.max(o.w || def.w, 1) * u + 6, Math.max(o.h || def.h, 1) * u + 6);
                             ctx.setLineDash([]);
                         }
                     }
                     if (i === s || live.current.extra.includes(i)) {
                         ctx.strokeStyle = "#00ff66";
                         ctx.lineWidth = 2;
-                        ctx.strokeRect(sx(o.x) - 2, sy(o.y + Math.max(def.h, 1)) - 2, Math.max(def.w, 1) * u + 4, Math.max(def.h, 1) * u + 4);
+                        ctx.strokeRect(sx(o.x) - 2, sy(o.y + Math.max(o.h || def.h, 1)) - 2, Math.max(o.w || def.w, 1) * u + 4, Math.max(o.h || def.h, 1) * u + 4);
                     }
                 });
                 if (tl === "edit" && s !== null && d.objects[s]) {
@@ -98792,7 +98803,7 @@ function Editor() {
             var def = __GD52__1.DEF[o.t];
             if (!def)
                 continue;
-            if (wx >= o.x && wx < o.x + Math.max(def.w, 1) && wy >= o.y && wy < o.y + Math.max(def.h, 1))
+            if (wx >= o.x && wx < o.x + Math.max(o.w || def.w, 1) && wy >= o.y && wy < o.y + Math.max(o.h || def.h, 1))
                 return i;
         }
         return null;
