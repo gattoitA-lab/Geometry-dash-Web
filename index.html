@@ -83947,6 +83947,41 @@ var Engine = (function () {
         a = Math.max(-70, Math.min(70, a));
         return a * Math.PI / 180;
     };
+    Engine.prototype.boostSpeed = function (p, kind, pad) {
+        var J = exports.PHYS.JUMPV[this.speed] || 20.124;
+        var m = p.mode || "cube";
+        var v = 0;
+        if (pad) {
+            var table = {
+                yellow: { cube: 32, robot: 32, ball: 19.2, spider: 19.2, swing: 19.2, ship: 16, ufo: 16 },
+                pink: { cube: 20.8, robot: 20.8, ball: 13.44, spider: 13.44, swing: 12.48, ship: 11.2, ufo: 12.8 },
+                red: { cube: 40, robot: 40, ball: 24, spider: 24, swing: 24, ship: 20.16, ufo: 19.2 },
+                blue: { cube: 12.8, robot: 12.8, ball: 7.68, spider: 7.68, swing: 7.68, ship: 12.8, ufo: 12.8 }
+            }[kind];
+            v = table && (table[m] || table.cube) || 0;
+        }
+        else if (kind === "yellow")
+            v = { cube: J, robot: .9 * J, ball: .7 * J, spider: .7 * J, swing: .6 * J, ship: 16, ufo: 16 }[m] || J;
+        else if (kind === "pink")
+            v = { cube: .72 * J, robot: .72 * J, ball: .7 * J * .77, spider: .7 * J * .77, swing: .6 * J * .72, ship: .37 * J, ufo: .42 * J }[m] || .72 * J;
+        else if (kind === "red")
+            v = { cube: 1.38 * J, robot: 1.28 * J, ball: .7 * J * 1.34, spider: .7 * J * 1.34, swing: .6 * J * 1.38, ship: J, ufo: 1.02 * J }[m] || 1.38 * J;
+        else if (kind === "blue")
+            v = .4 * J;
+        else if (kind === "green")
+            v = { cube: J, robot: J, ball: J, spider: J, swing: .7 * J, ship: .7 * J, ufo: 16 }[m] || J;
+        else if (kind === "black")
+            v = { cube: 30, robot: 30, ball: 30, spider: 30, ship: 28, ufo: 22.4, swing: 28 }[m] || 30;
+        return v * (p.mini ? .8 : 1);
+    };
+    Engine.prototype.boostV = function (p, v, flip, sign) {
+        if (flip)
+            p.grav = p.grav === 1 ? -1 : 1;
+        p.vy = (sign || 1) * v * p.grav;
+        p.onGround = false;
+        p.boost = 0;
+        p.dash = false;
+    };
     Engine.prototype.applyBoost = function (p, t, pad, obj) {
         var kind = t.replace(/^(pad|orb)_/, "");
         if (p.mode === "wave" && ![
@@ -83963,27 +83998,27 @@ var Engine = (function () {
         };
         switch (kind) {
             case "yellow":
-                this.launch(p, pad ? 4.3 : 2.15);
-                break;
             case "pink":
-                this.launch(p, pad ? 1.8 : 1.2);
-                break;
             case "red":
-                this.launch(p, pad ? 6.8 : 4);
+                this.boostV(p, this.boostSpeed(p, kind, pad), false, 1);
                 break;
             case "blue":
-                flip();
-                p.vy = p.mode === "wave" ? 0 : -p.grav * (pad ? 14 : 11);
-                p.onGround = false;
+                if (p.mode === "wave") {
+                    flip();
+                    p.vy = 0;
+                    p.onGround = false;
+                }
+                else
+                    this.boostV(p, this.boostSpeed(p, "blue", pad), true, -1);
                 break;
             case "green":
                 flip();
                 if (p.mode === "wave")
                     break;
-                this.launch(p, 2);
+                this.boostV(p, this.boostSpeed(p, "green", pad), false, 1);
                 break;
             case "black":
-                p.vy = -p.grav * 30;
+                this.boostV(p, this.boostSpeed(p, "black", pad), false, -1);
                 break;
             case "dash":
                 p.dash = true;
