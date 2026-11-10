@@ -83138,6 +83138,7 @@ var Engine = (function () {
                 onGround: true,
                 rot: 0,
                 dash: false,
+                dashA: 0,
                 boost: 0,
                 fresh: false,
                 second: false
@@ -83227,6 +83228,7 @@ var Engine = (function () {
                 var p = _c.value;
                 p.fresh = false;
                 p.dash = false;
+                p.dashA = 0;
             }
         }
         catch (e_13_1) { e_13 = { error: e_13_1 }; }
@@ -83569,12 +83571,12 @@ var Engine = (function () {
             else if (kind === "pad") {
                 if (overlap(box, ob) && !this_1.used.has(key)) {
                     this_1.used.add(key);
-                    this_1.applyBoost(p, o.o.t, true);
+                    this_1.applyBoost(p, o.o.t, true, o.o);
                 }
             }
             else if (kind === "orb") {
                 if (p.fresh && !this_1.used.has(key) && circleBox(o.x + .5, o.y + .5, o.circle, box)) {
-                    if (this_1.applyBoost(p, o.o.t, false)) {
+                    if (this_1.applyBoost(p, o.o.t, false, o.o)) {
                         this_1.used.add(key);
                         p.fresh = false;
                         this_1.burst(o.x + .5, o.y + .5, o.def.color, 10, 5, .4);
@@ -83791,7 +83793,17 @@ var Engine = (function () {
             finally { if (e_18) throw e_18.error; }
         }
     };
-    Engine.prototype.applyBoost = function (p, t, pad) {
+    Engine.prototype.dashAngle = function (o) {
+        var deg = o ? (o.r || 0) * 90 + (o.a || 0) : 0;
+        var a = ((-deg + 180) % 360 + 360) % 360 - 180;
+        if (a > 90)
+            a = 180 - a;
+        else if (a < -90)
+            a = -180 - a;
+        a = Math.max(-70, Math.min(70, a));
+        return a * Math.PI / 180;
+    };
+    Engine.prototype.applyBoost = function (p, t, pad, obj) {
         var kind = t.replace(/^(pad|orb)_/, "");
         if (p.mode === "wave" && ![
             "blue",
@@ -83831,11 +83843,13 @@ var Engine = (function () {
                 break;
             case "dash":
                 p.dash = true;
+                p.dashA = this.dashAngle(obj);
                 p.vy = 0;
                 break;
             case "dash_magenta":
                 flip();
                 p.dash = true;
+                p.dashA = this.dashAngle(obj);
                 p.vy = 0;
                 break;
             case "spider":
@@ -83970,10 +83984,12 @@ var Engine = (function () {
     Engine.prototype.control = function (p, h) {
         var g = p.grav;
         if (p.dash) {
-            if (!this.holding)
+            if (!this.holding) {
                 p.dash = false;
+                p.dashA = 0;
+            }
             else {
-                p.vy = 0;
+                p.vy = Math.tan(p.dashA || 0) * __GD52__1.SPEEDS[this.speed];
                 return;
             }
         }
@@ -84769,12 +84785,16 @@ var Engine = (function () {
                         flip: flip
                     });
                     if (p.dash) {
+                        ctx.save();
+                        ctx.translate(sx(p.x + s / 2), sy(p.y + s / 2));
+                        ctx.rotate(-(p.dashA || 0));
                         ctx.fillStyle = "rgba(255,170,40,0.7)";
                         ctx.beginPath();
-                        ctx.moveTo(sx(p.x), sy(p.y + s * .2));
-                        ctx.lineTo(sx(p.x - 1.2), sy(p.y + s / 2));
-                        ctx.lineTo(sx(p.x), sy(p.y + s * .8));
+                        ctx.moveTo(-s * u * .5, -s * u * .3);
+                        ctx.lineTo(-s * u * 1.7, 0);
+                        ctx.lineTo(-s * u * .5, s * u * .3);
                         ctx.fill();
+                        ctx.restore();
                     }
                 }
             }
