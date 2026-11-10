@@ -1400,20 +1400,28 @@ if (typeof module !== "undefined")
         else
             add();
     };
+    var persistentStorage = function (s) { return s === "mongo" || s === "r2"; };
+    var restoreRemote = function (u) {
+        lsSet("gd-server", window.GD_SERVER ? null : u);
+        lsSet("gd-local-auto", null);
+        lsSet("gd-remote", u);
+        try {
+            location.reload();
+        }
+        catch (e) { }
+    };
     var storeProbe = function (u, checkLocal) {
         NATIVE(u + "/ping", { cache: "no-store" }).then(function (r) {
             return r.json();
         }).then(function (j) {
             if (!j || !j.storage)
                 return;
-            if (checkLocal) {
-                if (j.storage === "mongo") {
-                    showNote("Il server ora ha un database: puoi usare di nuovo l'account condiviso.", "Usa il server", function () { window.__gdSetServer(lsGet("gd-remote") || ""); });
-                    return;
-                }
+            if (persistentStorage(j.storage)) {
+                if (checkLocal)
+                    restoreRemote(u);
                 return;
             }
-            if (j.storage === "mongo")
+            if (checkLocal)
                 return;
             var tok = lsGet("gd-token");
             return NATIVE(u + "/api/auth/me", { headers: tok ? { "Authorization": "Bearer " + tok } : {} }).then(function (r) {
@@ -1425,7 +1433,7 @@ if (typeof module !== "undefined")
     if (SERVER && !EXPLICIT && !isLocalPage && hostOf(SERVER) !== location.host)
         storeProbe(SERVER, false);
     if (!SERVER && lsGet("gd-local-auto") === "1" && !isLocalPage) {
-        var remUrl = lsGet("gd-remote");
+        var remUrl = window.GD_SERVER || lsGet("gd-remote");
         if (remUrl)
             storeProbe(remUrl, true);
     }
@@ -80578,6 +80586,8 @@ exports.OBJECTS = [
     d("orb_dash", "orb", "orbs", 1, 1, "#22ff88", "Dash orb", "Orb dash"),
     d("orb_dash_magenta", "orb", "orbs", 1, 1, "#ff22cc", "Magenta dash orb", "Orb dash magenta"),
     d("orb_spider", "orb", "orbs", 1, 1, "#c026d3", "Spider orb", "Orb ragno"),
+    Object.assign(d("orb_trigger", "orb", "orbs", 1, 1, "#9aa4b2", "Trigger orb", "Orb trigger (attiva gruppo)"), { "defaults": { "tg": 1 } }),
+    d("orb_spider_dash", "orb", "orbs", 1, 1, "#22ff88", "Spider dash orb", "Orb spider dash"),
     d("portal_cube", "portal", "portals", 1, 3, "#22ff66", "Cube portal", "Portale cubo"),
     d("portal_ship", "portal", "portals", 1, 3, "#ff44dd", "Ship portal", "Portale nave"),
     d("portal_ball", "portal", "portals", 1, 3, "#ff4422", "Ball portal", "Portale palla"),
@@ -82128,7 +82138,7 @@ function drawObject(ctx, o, px, py, u, opt) {
             ctx.strokeStyle = oc;
             ctx.lineWidth = lw * .9;
             ctx.stroke();
-            if (o.t.startsWith("orb_dash")) {
+            if (o.t.startsWith("orb_dash") || o.t === "orb_spider_dash") {
                 ctx.fillStyle = "#0a0f1a";
                 ctx.beginPath();
                 ctx.moveTo(r * .55, 0);
@@ -82142,6 +82152,27 @@ function drawObject(ctx, o, px, py, u, opt) {
                 ctx.moveTo(0, -r * .62);
                 ctx.lineTo(r * .5, r * .34);
                 ctx.lineTo(-r * .5, r * .34);
+                ctx.fill();
+            }
+            if (o.t === "orb_spider_dash") {
+                ctx.strokeStyle = "#0a0f1a";
+                ctx.lineWidth = lw * 1.2;
+                ctx.beginPath();
+                ctx.moveTo(-r * .55, r * .52);
+                ctx.lineTo(0, r * .12);
+                ctx.lineTo(r * .55, r * .52);
+                ctx.stroke();
+            }
+            if (o.t === "orb_trigger") {
+                ctx.fillStyle = "#0a0f1a";
+                ctx.beginPath();
+                ctx.moveTo(r * .1, -r * .58);
+                ctx.lineTo(-r * .32, r * .05);
+                ctx.lineTo(-r * .02, r * .05);
+                ctx.lineTo(-r * .12, r * .58);
+                ctx.lineTo(r * .34, -r * .08);
+                ctx.lineTo(r * .04, -r * .08);
+                ctx.closePath();
                 ctx.fill();
             }
             break;
@@ -83604,6 +83635,7 @@ var Engine = (function () {
                 rot: 0,
                 dash: false,
                 dashA: 0,
+                spiderDash: false,
                 boost: 0,
                 fresh: false,
                 second: false
@@ -83700,6 +83732,11 @@ var Engine = (function () {
             for (var _b = __values(this.players), _c = _b.next(); !_c.done; _c = _b.next()) {
                 var p = _c.value;
                 p.fresh = false;
+                if (p.spiderDash) {
+                    p.spiderDash = false;
+                    p.grav = p.grav === 1 ? -1 : 1;
+                    this.teleportSpider(p);
+                }
                 p.dash = false;
                 p.dashA = 0;
             }
@@ -84148,9 +84185,34 @@ var Engine = (function () {
                 if (trigFresh && (!o.o.sp || o.o.touch) && (chanOk || o.o.sp) && (!this_1.used.has(key) || o.o.multi) && !p.second) {
                     this_1.used.add(key);
                     var fire_1 = function (to) {
+                        _this.fireTrig = fire_1;
+                        _this.fireTrigger(to, p);
+                    };
+                    fire_1(o.o);
+                }
+            }
+        };
+        var this_1 = this;
+        try {
+            for (var _b = __values(this.near(p.x - 2, p.x + s + 2)), _c = _b.next(); !_c.done; _c = _b.next()) {
+                var o = _c.value;
+                var state_1 = _loop_1(o);
+                if (typeof state_1 === "object")
+                    return state_1.value;
+            }
+        }
+        catch (e_18_1) { e_18 = { error: e_18_1 }; }
+        finally {
+            try {
+                if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+            }
+            finally { if (e_18) throw e_18.error; }
+        }
+    };
+    Engine.prototype.fireTrigger = function (to, p) {
+        var _this = this;
                         var e_19, _a, e_20, _b, _c;
                         var _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23;
-                        _this.fireTrig = fire_1;
                         switch (to.t) {
                             case "trigger_follow": {
                                 var s0 = _this.gst((_d = to.tg) !== null && _d !== void 0 ? _d : 1), P = _this.players[0];
@@ -84342,28 +84404,17 @@ var Engine = (function () {
                                     _this.groundTarget = shadeHex(to.color, .62);
                                 }
                         }
-                    };
-                    fire_1(o.o);
-                }
-            }
-        };
-        var this_1 = this;
-        try {
-            for (var _b = __values(this.near(p.x - 2, p.x + s + 2)), _c = _b.next(); !_c.done; _c = _b.next()) {
-                var o = _c.value;
-                var state_1 = _loop_1(o);
-                if (typeof state_1 === "object")
-                    return state_1.value;
-            }
-        }
-        catch (e_18_1) { e_18 = { error: e_18_1 }; }
-        finally {
-            try {
-                if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
-            }
-            finally { if (e_18) throw e_18.error; }
+
+    };
+
+    Engine.prototype.fireTriggerGroup = function (tg, p) {
+        var list = this.gmap.get(Number(tg) || 1) || [];
+        for (var i = 0; i < list.length; i++) {
+            if (list[i].def.kind === "trigger")
+                this.fireTrigger(list[i].o, p || this.players[0]);
         }
     };
+
     Engine.prototype.dashAngle = function (o) {
         var deg = o ? (o.r || 0) * 90 + (o.a || 0) : 0;
         var a = ((-deg + 180) % 360 + 360) % 360 - 180;
@@ -84408,6 +84459,7 @@ var Engine = (function () {
         p.onGround = false;
         p.boost = 0;
         p.dash = false;
+        p.spiderDash = false;
     };
     Engine.prototype.applyBoost = function (p, t, pad, obj) {
         var kind = t.replace(/^(pad|orb)_/, "");
@@ -84417,12 +84469,16 @@ var Engine = (function () {
             "spider",
             "dash",
             "dash_magenta",
-            "black"
+            "black",
+            "spider_dash",
+            "trigger"
         ].includes(kind))
             return false;
         var flip = function () {
             p.grav = p.grav === 1 ? -1 : 1;
         };
+        if (kind !== "trigger" && kind !== "spider_dash")
+            p.spiderDash = false;
         switch (kind) {
             case "yellow":
             case "pink":
@@ -84458,9 +84514,18 @@ var Engine = (function () {
                 p.dashA = this.dashAngle(obj);
                 p.vy = 0;
                 break;
+            case "spider_dash":
+                p.dash = true;
+                p.spiderDash = true;
+                p.dashA = this.dashAngle(obj);
+                p.vy = 0;
+                break;
             case "spider":
                 flip();
                 this.teleportSpider(p);
+                break;
+            case "trigger":
+                this.fireTriggerGroup(obj ? obj.tg : 1, p);
                 break;
         }
         return true;
@@ -84646,6 +84711,11 @@ var Engine = (function () {
             if (!this.holding) {
                 p.dash = false;
                 p.dashA = 0;
+                if (p.spiderDash) {
+                    p.spiderDash = false;
+                    p.grav = p.grav === 1 ? -1 : 1;
+                    this.teleportSpider(p);
+                }
             }
             else {
                 p.vy = Math.tan(p.dashA || 0) * __GD52__1.SPEEDS[this.speed];
@@ -84942,15 +85012,16 @@ var Engine = (function () {
     };
     Engine.prototype.tickSpawn = function () {
         var e_27, _a;
-        if (!this.spawnQ.length || !this.fireTrig)
+        if (!this.spawnQ.length)
             return;
+        var fire = this.fireTrig || function (to) { this.fireTrigger(to, this.players[0]); }.bind(this);
         var q = this.spawnQ;
         this.spawnQ = [];
         try {
             for (var q_1 = __values(q), q_1_1 = q_1.next(); !q_1_1.done; q_1_1 = q_1.next()) {
                 var e = q_1_1.value;
                 if (e.t <= this.time)
-                    this.fireTrig(e.to);
+                    fire(e.to);
                 else
                     this.spawnQ.push(e);
             }
@@ -99312,6 +99383,7 @@ var EASE_OPTS = [["linear", "Lineare", "Linear"], ["in", "Accelera", "Ease in"],
 var _G = ["tg", "Gruppo bersaglio", "Target group", 1, 1, 9999, 1];
 var _D = ["dur", "Durata (s)", "Time (s)", 1, 0, 60, .1];
 var TP = {
+    orb_trigger: [_G],
     trigger_move: [_G, ["mx", "Sposta X (blocchi)", "Move X (blocks)", 0, -200, 200, .5], ["my", "Sposta Y (blocchi)", "Move Y (blocks)", 2, -200, 200, .5], _D, ["ease"]],
     trigger_rotate: [_G, ["deg", "Gradi", "Degrees", 90, -3600, 3600, 15], _D, ["ease"]],
     trigger_scale: [_G, ["k", "Scala", "Scale", 2, .1, 10, .1], _D, ["ease"]],
