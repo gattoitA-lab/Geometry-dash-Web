@@ -83013,7 +83013,8 @@ var Engine = (function () {
             if (!def)
                 return;
             var b = worldBox(o, def);
-            var circle = def.kind === "saw" ? Math.min(Math.max(def.w, 1), Math.max(def.h, 1)) / 2 * (o.t === "spikeball" ? .7 : .78) : def.kind === "orb" ? .68 : def.kind === "coin" ? .6 : 0;
+            var bw = b[2] - b[0], bh = b[3] - b[1];
+            var circle = def.kind === "saw" ? Math.min(Math.max(def.w, 1), Math.max(def.h, 1)) / 2 * (o.t === "spikeball" ? .7 : .78) : def.kind === "orb" ? Math.max(bw, bh) * .68 : def.kind === "coin" ? Math.max(bw, bh) * .6 : 0;
             var ro = {
                 i: i,
                 o: o,
@@ -83735,11 +83736,12 @@ var Engine = (function () {
                 }
             }
             else if (kind === "orb") {
-                if (p.fresh && !this_1.used.has(key) && circleBox(o.x + .5, o.y + .5, o.circle, box)) {
+                var ocx = o.x + o.w / 2, ocy = o.y + o.h / 2;
+                if (this_1.holding && !this_1.used.has(key) && circleBox(ocx, ocy, o.circle, box)) {
                     if (this_1.applyBoost(p, o.o.t, false, o.o)) {
                         this_1.used.add(key);
                         p.fresh = false;
-                        this_1.burst(o.x + .5, o.y + .5, o.def.color, 10, 5, .4);
+                        this_1.burst(ocx, ocy, o.def.color, 10, 5, .4);
                         __GD47__1.audio.sfx("orb");
                     }
                 }
@@ -83751,10 +83753,11 @@ var Engine = (function () {
                 }
             }
             else if (kind === "coin") {
-                if (o.coin >= 0 && circleBox(o.x + .5, o.y + .5, o.circle, box)) {
+                var ccx = o.x + o.w / 2, ccy = o.y + o.h / 2;
+                if (o.coin >= 0 && circleBox(ccx, ccy, o.circle, box)) {
                     o.broken = true;
                     this_1.coins[o.coin] = true;
-                    this_1.burst(o.x + .5, o.y + .5, "#ffd700", 14, 5, .6);
+                    this_1.burst(ccx, ccy, "#ffd700", 14, 5, .6);
                     __GD47__1.audio.sfx("coin");
                 }
             }
@@ -83781,6 +83784,7 @@ var Engine = (function () {
                                 if (ng !== p.grav) {
                                     p.grav = ng;
                                     p.vy *= .5;
+                                    p.onGround = false;
                                 }
                                 break;
                             }
@@ -84060,10 +84064,26 @@ var Engine = (function () {
         var e_21, _a, e_22, _b;
         var t = o.o.t;
         var all = this.players;
+        var self = this;
         if (t.startsWith("speed_")) {
-            this.speed = Number(t.slice(6));
+            var ns = Number(t.slice(6));
+            if (isFinite(ns))
+                this.speed = Math.max(0, Math.min(4, ns));
             return;
         }
+        var resize = function (q, mini) {
+            if (q.mini === mini)
+                return;
+            var oldS = q.mini ? .6 : 1;
+            q.mini = mini;
+            var newS = mini ? .6 : 1;
+            q.y += (oldS - newS) / 2;
+            var floor = self.bounds ? self.bounds.floor : 0;
+            q.y = Math.max(floor, q.y);
+            if (self.bounds)
+                q.y = Math.min(q.y, self.bounds.ceil - newS);
+            q.onGround = false;
+        };
         this.flash = .6;
         __GD47__1.audio.sfx("portal");
         var s = this.size(p);
@@ -84072,17 +84092,20 @@ var Engine = (function () {
                 if (p.grav === 1) {
                     p.grav = -1;
                     p.vy *= .5;
+                    p.onGround = false;
                 }
                 break;
             case "portal_grav_down":
                 if (p.grav === -1) {
                     p.grav = 1;
                     p.vy *= .5;
+                    p.onGround = false;
                 }
                 break;
             case "portal_grav_flip":
                 p.grav = p.grav === 1 ? -1 : 1;
                 p.vy *= .5;
+                p.onGround = false;
                 break;
             case "portal_mirror_on":
                 this.mirror = true;
@@ -84091,21 +84114,17 @@ var Engine = (function () {
                 this.mirror = false;
                 break;
             case "portal_mini":
-                all.forEach(function (q) { return q.mini = true; });
+                all.forEach(function (q) { resize(q, true); });
                 break;
             case "portal_big":
-                all.forEach(function (q) {
-                    if (q.mini && q.grav === -1)
-                        q.y -= .4;
-                    q.mini = false;
-                });
+                all.forEach(function (q) { resize(q, false); });
                 break;
             case "portal_dual_on":
                 if (!this.dual) {
                     this.dual = true;
                     this.setBoundsFrom(o, p.mode);
                     var b = this.bounds;
-                    var p2 = __assign(__assign({}, p), { second: true, grav: p.grav === 1 ? -1 : 1, y: b.floor + b.ceil - p.y - s, vy: -p.vy });
+                    var p2 = __assign(__assign({}, p), { second: true, grav: p.grav === 1 ? -1 : 1, y: b.floor + b.ceil - p.y - s, vy: -p.vy, onGround: false });
                     this.players = [p.second ? this.players[0] : p, p2];
                     this.trails[1] = [];
                 }
