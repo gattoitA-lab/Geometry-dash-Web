@@ -82511,19 +82511,23 @@ var __GD53__1 = require("53");
 var __GD49__1 = require("49");
 var __GD47__1 = require("47");
 exports.PHYS = {
-    G: 95,
-    JUMP: 20,
-    VMAX: 26,
-    ROBOT_V: 11,
+    G: 93.137,
+    JUMP: 20.124,
+    JUMPV: [19.116, 20.124, 20.556, 20.214, 20.214],
+    GRAV: [91.584, 93.137, 92.88, 93.312, 93.312],
+    VMAX: 27,
+    ROBOT_V: 10.062,
     ROBOT_T: .24,
-    SHIP_UP: 72,
-    SHIP_DOWN: 52,
-    SHIP_VMAX: 13,
-    UFO_V: 13.5,
-    UFO_G: 62,
-    BALL_G: 72,
+    SHIP_UP: 46.57,
+    SHIP_DOWN: 44.7,
+    SHIP_VMAX: 14.4,
+    SHIP_VMIN: 11.52,
+    UFO_V: 12.368,
+    UFO_G: 37.152,
+    BALL_V: 6.037,
+    BALL_G: 55.882,
     SWING_G: 55,
-    SWING_VMAX: 12
+    SWING_VMAX: 16
 };
 var STEP = 1 / 240;
 var BOUND_H = {
@@ -83512,6 +83516,58 @@ var Engine = (function () {
     Engine.prototype.size = function (p) {
         return p.mini ? .6 : 1;
     };
+    var HIT_BLUE = {
+        cube: 9 / 30,
+        ship: 9 / 30,
+        ball: 9 / 30,
+        ufo: 9 / 30,
+        wave: 3 / 30,
+        robot: 9 / 30,
+        spider: 9 / 30,
+        swing: 9 / 30
+    };
+    var HIT_BLUE_MINI = {
+        cube: 10 / 30,
+        ship: 10 / 30,
+        ball: 10 / 30,
+        ufo: 10 / 30,
+        wave: 3 / 30,
+        robot: 10 / 30,
+        spider: 10 / 30,
+        swing: 10 / 30
+    };
+    var HIT_RED = {
+        cube: 1,
+        ship: 1,
+        ball: 1,
+        ufo: 1,
+        wave: 10 / 30,
+        robot: 1,
+        spider: 27.5 / 30,
+        swing: 1
+    };
+    var HIT_RED_MINI = {
+        cube: .6,
+        ship: .6,
+        ball: .6,
+        ufo: .6,
+        wave: .2,
+        robot: .6,
+        spider: .55,
+        swing: .6
+    };
+    Engine.prototype.hitBox = function (p, red) {
+        var s = this.size(p);
+        var table = red ? (p.mini ? HIT_RED_MINI : HIT_RED) : (p.mini ? HIT_BLUE_MINI : HIT_BLUE);
+        var size = table[p.mode] || (red ? 1 : .3);
+        var cx = p.x + s / 2, cy = p.y + s / 2;
+        return [
+            cx - size / 2,
+            cy - size / 2,
+            cx + size / 2,
+            cy + size / 2
+        ];
+    };
     Engine.prototype.gm = function (p) {
         return {
             cube: exports.PHYS.G,
@@ -83636,14 +83692,7 @@ var Engine = (function () {
             p.x + s,
             p.y + s
         ];
-        var k = p.mode === "wave" ? .3 : .5;
-        var cx = p.x + s / 2, cy = p.y + s / 2;
-        var hbox = [
-            cx - s * k,
-            cy - s * k,
-            cx + s * k,
-            cy + s * k
-        ];
+        var hbox = this.hitBox(p, true);
         var _loop_1 = function (o) {
             if (o.broken)
                 return "continue";
@@ -84092,17 +84141,17 @@ var Engine = (function () {
         switch (p.mode) {
             case "cube":
                 if (p.onGround && this.holding) {
-                    p.vy = exports.PHYS.JUMP * g * mj;
+                    p.vy = exports.PHYS.JUMPV[this.speed] * g * mj;
                     p.onGround = false;
                     p.fresh = false;
                     this.jumps++;
                 }
                 else
-                    p.vy -= exports.PHYS.G * g * h * (p.mini ? 1.1 : 1);
+                    p.vy -= exports.PHYS.GRAV[this.speed] * g * h;
                 break;
             case "robot":
                 if (p.onGround && this.holding) {
-                    p.vy = exports.PHYS.ROBOT_V * g * mj;
+                    p.vy = exports.PHYS.JUMPV[this.speed] * .5 * g * mj;
                     p.boost = exports.PHYS.ROBOT_T;
                     p.onGround = false;
                     p.fresh = false;
@@ -84110,7 +84159,7 @@ var Engine = (function () {
                 }
                 else if (p.boost > 0 && this.holding) {
                     p.boost -= h;
-                    p.vy = exports.PHYS.ROBOT_V * g * mj;
+                    p.vy = exports.PHYS.JUMPV[this.speed] * .5 * g * mj;
                 }
                 else {
                     p.boost = 0;
@@ -84118,15 +84167,14 @@ var Engine = (function () {
                 }
                 break;
             case "ship": {
-                var k = p.mini ? 1.3 : 1;
-                p.vy += (this.holding ? exports.PHYS.SHIP_UP : -exports.PHYS.SHIP_DOWN) * g * h * k;
-                var vm = exports.PHYS.SHIP_VMAX * (p.mini ? 1.15 : 1);
-                p.vy = Math.max(-vm, Math.min(vm, p.vy));
+                var k = p.mini ? 1.18 : 1;
+                p.vy += (this.holding ? exports.PHYS.SHIP_UP : -exports.PHYS.SHIP_DOWN) * g * h;
+                p.vy = Math.max(-exports.PHYS.SHIP_VMIN * k, Math.min(exports.PHYS.SHIP_VMAX * k, p.vy));
                 break;
             }
             case "ufo":
                 if (p.fresh) {
-                    p.vy = exports.PHYS.UFO_V * g * mj;
+                    p.vy = exports.PHYS.UFO_V * g * (p.mini ? .967 : 1);
                     p.fresh = false;
                     p.onGround = false;
                     this.jumps++;
@@ -84137,7 +84185,7 @@ var Engine = (function () {
             case "ball":
                 if (p.onGround && this.holding && p.fresh) {
                     p.grav = g === 1 ? -1 : 1;
-                    p.vy = -p.grav * 5;
+                    p.vy = -p.grav * exports.PHYS.BALL_V * mj;
                     p.onGround = false;
                     p.fresh = false;
                     this.jumps++;
@@ -84169,7 +84217,7 @@ var Engine = (function () {
                 break;
         }
         if (p.mode !== "ship" && p.mode !== "swing" && p.mode !== "wave") {
-            var vm = p.mode === "ufo" ? 15 : exports.PHYS.VMAX;
+            var vm = p.mode === "ufo" ? 14.4 : exports.PHYS.VMAX;
             if (p.vy * p.grav < -vm)
                 p.vy = -vm * p.grav;
         }
@@ -84200,7 +84248,7 @@ var Engine = (function () {
                     var surf = o.y + (r === 0 ? cx_1 - o.x : 1 - (cx_1 - o.x));
                     if (p.y < surf + .08 && p.y > o.y - .6 && p.vy <= spd + .5) {
                         p.y = surf;
-                        p.vy = r === 0 ? spd : 0;
+                        p.vy = 0;
                         p.onGround = true;
                     }
                 }
@@ -84302,14 +84350,7 @@ var Engine = (function () {
             return this.die();
         if (p.dash && p.onGround && !wasGround)
             p.dash = false;
-        var k = p.mode === "wave" ? .15 : .2;
-        var cx = p.x + s / 2, cy = p.y + s / 2;
-        var inner = [
-            cx - s * k,
-            cy - s * k,
-            cx + s * k,
-            cy + s * k
-        ];
+        var inner = this.hitBox(p, false);
         try {
             for (var near_3 = __values(near), near_3_1 = near_3.next(); !near_3_1.done; near_3_1 = near_3.next()) {
                 var o = near_3_1.value;
@@ -84486,7 +84527,7 @@ var Engine = (function () {
                     if (c.done)
                         continue;
                     var A = hit((_m = c.to.a) !== null && _m !== void 0 ? _m : 0), B = hit((_o = c.to.b) !== null && _o !== void 0 ? _o : 1);
-                    var boxes = function (L) { return L === null ? [[P_1.x - .4, P_1.y, P_1.x + .4, P_1.y + .9]] : L.map(function (r) { return [r.x, r.y, r.x + 1, r.y + 1]; }); };
+                    var boxes = function (L) { return L === null ? [_this.hitBox(P_1, false)] : L.map(function (r) { return [r.x, r.y, r.x + 1, r.y + 1]; }); };
                     var ba = boxes(A), bb = boxes(B);
                     var ok = false;
                     try {
