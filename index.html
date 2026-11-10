@@ -92,6 +92,290 @@
   requestAnimationFrame(tick);
 })();
 </script>
+<script>
+/* Impostazioni globali: comandi, grafica, effetti e audio (salvate su questo dispositivo). */
+(function () {
+  "use strict";
+  var LS = "gd-settings-v1";
+  var DEFAULTS = {
+    jumpKey: "Space",
+    pauseKey: "Escape",
+    restartKey: "KeyR",
+    checkpointKey: "KeyZ",
+    removeCheckpointKey: "KeyX",
+    music: 1,
+    sfx: 1,
+    particles: true,
+    shake: true,
+    trails: true,
+    glow: true,
+    quality: "auto"
+  };
+  var QUALITY = { auto: 1, alta: 1, media: 1, bassa: 1 };
+  function qualityNow() {
+    try { return localStorage.getItem("gd-quality") || "auto"; } catch (e) { return "auto"; }
+  }
+  function read() {
+    var out = {}, k, raw = null;
+    for (k in DEFAULTS) out[k] = DEFAULTS[k];
+    try { raw = JSON.parse(localStorage.getItem(LS) || "null"); } catch (e) { raw = null; }
+    if (raw && typeof raw === "object") {
+      for (k in DEFAULTS) {
+        if (raw[k] === undefined) continue;
+        if (k === "music" || k === "sfx") out[k] = Math.max(0, Math.min(1, Number(raw[k]) || 0));
+        else if (typeof DEFAULTS[k] === "boolean") out[k] = !!raw[k];
+        else out[k] = String(raw[k] || DEFAULTS[k]);
+      }
+    }
+    out.quality = qualityNow();
+    return out;
+  }
+  var state = read();
+  function save() {
+    try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) {}
+    try { window.dispatchEvent(new CustomEvent("gd-settings-change", { detail: api.all() })); } catch (e) {}
+  }
+  function audioApply(audio) {
+    audio = audio || window.__gdAudio;
+    if (!audio) return;
+    if (audio.setMusicVol) audio.setMusicVol(state.music);
+    if (audio.setSfxVol) audio.setSfxVol(state.sfx);
+  }
+  var api = {
+    get: function (k) { return state[k]; },
+    all: function () { var o = {}, k; for (k in DEFAULTS) o[k] = state[k]; return o; },
+    set: function (k, v) {
+      if (!(k in DEFAULTS)) return;
+      if (k === "music" || k === "sfx") v = Math.max(0, Math.min(1, Number(v) || 0));
+      else if (typeof DEFAULTS[k] === "boolean") v = !!v;
+      else v = String(v || DEFAULTS[k]);
+      state[k] = v;
+      if (k === "quality" && window.__gdSetQuality) window.__gdSetQuality(v);
+      save();
+      if (k === "music" || k === "sfx") audioApply();
+    },
+    reset: function () {
+      var k;
+      for (k in DEFAULTS) state[k] = DEFAULTS[k];
+      state.quality = "auto";
+      if (window.__gdSetQuality) window.__gdSetQuality("auto");
+      save(); audioApply();
+    },
+    applyAudio: audioApply,
+    apply: function () {
+      if (window.__gdSetQuality) window.__gdSetQuality(qualityNow());
+      audioApply();
+    }
+  };
+  window.GDSettings = api;
+  window.__gdApplySettings = api.apply;
+  if (window.__gdSetQuality) window.__gdSetQuality(qualityNow());
+
+  var css = [
+    ".gds-overlay{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(3,7,14,.8);backdrop-filter:blur(8px)}",
+    ".gds-panel{width:min(650px,96vw);max-height:92vh;overflow:auto;border:1px solid rgba(0,240,255,.35);border-radius:18px;background:linear-gradient(160deg,#172233,#0c121e 60%,#111827);box-shadow:0 24px 80px rgba(0,0,0,.65),0 0 42px rgba(0,240,255,.08);color:#e9f7ff;padding:20px;font-family:Inter,'Space Grotesk Variable',sans-serif}",
+    ".gds-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,.1)}",
+    ".gds-title{font-size:22px;font-weight:900;letter-spacing:.08em;color:#fff}.gds-title span{color:#00f0ff}",
+    ".gds-x{border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.32);color:#fff;border-radius:999px;width:36px;height:36px;font-size:20px;cursor:pointer}",
+    ".gds-x:hover{border-color:#ff1744;color:#ff6b7f}",
+    ".gds-note{font-size:11px;color:rgba(255,255,255,.5);margin:10px 0 0;line-height:1.5}",
+    ".gds-sec{margin-top:16px;padding:12px 14px;border:1px solid rgba(255,255,255,.09);border-radius:13px;background:rgba(0,0,0,.2)}",
+    ".gds-sec h3{margin:0 0 4px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#00f0ff}",
+    ".gds-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px}",
+    ".gds-row:last-child{border-bottom:0;padding-bottom:0}.gds-label{font-weight:700}.gds-sub{display:block;font-size:10px;font-weight:400;color:rgba(255,255,255,.45);margin-top:2px}",
+    ".gds-key{min-width:108px;border:2px solid rgba(0,240,255,.45);background:rgba(0,240,255,.12);color:#bdf9ff;border-radius:8px;padding:7px 9px;font-weight:800;font-size:12px;cursor:pointer}",
+    ".gds-key:hover{background:rgba(0,240,255,.22)}.gds-key.gds-listening{border-color:#ffe600;color:#ffe600;background:rgba(255,230,0,.12)}",
+    ".gds-select{border:1px solid rgba(255,255,255,.2);background:#0b1220;color:#fff;border-radius:8px;padding:7px 8px;font-size:12px;min-width:132px}",
+    ".gds-select option{color:#000}",
+    ".gds-range{width:170px;accent-color:#00ff66;vertical-align:middle}",
+    ".gds-val{display:inline-block;width:42px;text-align:right;font-family:monospace;font-size:11px;color:#ffe600}",
+    ".gds-check{width:20px;height:20px;accent-color:#00ff66;cursor:pointer}",
+    ".gds-foot{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}",
+    ".gds-btn{border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;border-radius:9px;padding:9px 14px;font-weight:800;font-size:12px;cursor:pointer}",
+    ".gds-btn:hover{border-color:#00f0ff}.gds-btn.primary{background:#00ff66;color:#051108;border-color:#00ff66}.gds-btn.danger{background:rgba(255,23,68,.16);border-color:rgba(255,23,68,.5);color:#ff8fa1}",
+    "@media(max-width:500px){.gds-panel{padding:14px}.gds-row{gap:8px}.gds-range{width:110px}.gds-key{min-width:88px}.gds-x{width:32px;height:32px}}"
+  ].join("");
+  function ensureCss() {
+    if (document.getElementById("gd-settings-style")) return;
+    var st = document.createElement("style");
+    st.id = "gd-settings-style";
+    st.textContent = css;
+    document.head.appendChild(st);
+  }
+  var modal = null, binding = null, globalKey = null;
+  function keyLabel(code) {
+    var s = String(code || "");
+    if (s === "Space") return "Spazio";
+    if (s === "Escape") return "Esc";
+    if (s === "ArrowUp") return "↑";
+    if (s === "ArrowDown") return "↓";
+    if (s === "ArrowLeft") return "←";
+    if (s === "ArrowRight") return "→";
+    if (s.indexOf("Key") === 0) return s.slice(3);
+    if (s.indexOf("Digit") === 0) return s.slice(5);
+    if (s === "Backspace") return "Backspace";
+    return s || "—";
+  }
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined && text !== null) n.textContent = text;
+    return n;
+  }
+  function row(label, hint) {
+    var r = el("div", "gds-row");
+    var l = el("div");
+    l.appendChild(el("span", "gds-label", label));
+    if (hint) l.appendChild(el("span", "gds-sub", hint));
+    r.appendChild(l);
+    return r;
+  }
+  function section(title) {
+    var s = el("section", "gds-sec");
+    s.appendChild(el("h3", "", title));
+    return s;
+  }
+  function keyRow(parent, key, label, hint) {
+    var r = row(label, hint);
+    var b = el("button", "gds-key", keyLabel(state[key]));
+    b.type = "button";
+    b.setAttribute("data-testid", "settings-" + key);
+    b.onclick = function () {
+      if (binding) binding.cancel();
+      b.textContent = "Premi un tasto...";
+      b.classList.add("gds-listening");
+      var cleanup = function () {
+        window.removeEventListener("keydown", onKey, true);
+        b.classList.remove("gds-listening");
+        if (binding && binding.btn === b) binding = null;
+      };
+      var onKey = function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.code === "Escape") { cleanup(); b.textContent = keyLabel(state[key]); return; }
+        if (/^(Shift|Control|Alt|Meta)/.test(e.code)) return;
+        cleanup();
+        state[key] = e.code;
+        save();
+        b.textContent = keyLabel(state[key]);
+      };
+      binding = { btn: b, cancel: function () { cleanup(); b.textContent = keyLabel(state[key]); } };
+      window.addEventListener("keydown", onKey, true);
+    };
+    r.appendChild(b);
+    parent.appendChild(r);
+  }
+  function toggleRow(parent, key, label, hint) {
+    var r = row(label, hint);
+    var c = el("input", "gds-check");
+    c.type = "checkbox";
+    c.checked = !!state[key];
+    c.setAttribute("data-testid", "settings-" + key);
+    c.onchange = function () { state[key] = !!c.checked; save(); };
+    r.appendChild(c);
+    parent.appendChild(r);
+  }
+  function volumeRow(parent, key, label, hint) {
+    var r = row(label, hint);
+    var wrap = el("div");
+    wrap.style.display = "flex";
+    wrap.style.alignItems = "center";
+    wrap.style.gap = "6px";
+    var input = el("input", "gds-range");
+    input.type = "range"; input.min = "0"; input.max = "100"; input.step = "1";
+    input.value = String(Math.round(state[key] * 100));
+    input.setAttribute("data-testid", "settings-" + key);
+    var val = el("span", "gds-val", input.value + "%");
+    input.oninput = function () {
+      state[key] = Math.max(0, Math.min(1, Number(input.value) / 100));
+      val.textContent = input.value + "%";
+      save();
+      audioApply();
+    };
+    wrap.appendChild(input); wrap.appendChild(val);
+    r.appendChild(wrap);
+    parent.appendChild(r);
+  }
+  function close() {
+    if (binding) binding.cancel();
+    if (globalKey) { window.removeEventListener("keydown", globalKey, true); globalKey = null; }
+    if (modal) { modal.remove(); modal = null; }
+    window.gdSettingsOpen = false;
+    try { window.dispatchEvent(new CustomEvent("gd-settings-close")); } catch (e) {}
+  }
+  function open() {
+    ensureCss();
+    if (modal) return;
+    window.gdSettingsOpen = true;
+    try { window.dispatchEvent(new CustomEvent("gd-settings-open")); } catch (e) {}
+    modal = el("div", "gds-overlay");
+    modal.setAttribute("data-testid", "settings-dialog");
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.onclick = function (e) { if (e.target === modal) close(); };
+    var panel = el("div", "gds-panel");
+    panel.onclick = function (e) { e.stopPropagation(); };
+    var head = el("div", "gds-head");
+    var title = el("div", "gds-title", "IMPOSTAZIONI ");
+    title.appendChild(el("span", "", "GD"));
+    head.appendChild(title);
+    var x = el("button", "gds-x", "×");
+    x.type = "button"; x.title = "Chiudi"; x.setAttribute("data-testid", "settings-close"); x.onclick = close;
+    head.appendChild(x);
+    panel.appendChild(head);
+    panel.appendChild(el("p", "gds-note", "Personalizza comandi, grafica e audio. Le preferenze restano salvate su questo dispositivo."));
+
+    var controls = section("Comandi");
+    keyRow(controls, "jumpKey", "Salto", "Tasto per saltare (oltre al tocco/click)");
+    keyRow(controls, "pauseKey", "Pausa", "Apre e chiude il menu di pausa");
+    keyRow(controls, "restartKey", "Riavvia tentativo", "Ricarica il livello dall'inizio");
+    keyRow(controls, "checkpointKey", "Aggiungi checkpoint", "Solo in modalità pratica");
+    keyRow(controls, "removeCheckpointKey", "Rimuovi checkpoint", "Solo in modalità pratica");
+    panel.appendChild(controls);
+
+    var gfx = section("Grafica ed effetti");
+    var qr = row("Qualità grafica", "Risoluzione e ombre; Auto si adatta agli FPS");
+    var qs = el("select", "gds-select");
+    ["auto", "alta", "media", "bassa"].forEach(function (q) {
+      var o = el("option", "", { auto: "Automatica", alta: "Alta", media: "Media", bassa: "Bassa" }[q]);
+      o.value = q;
+      if (q === qualityNow()) o.selected = true;
+      qs.appendChild(o);
+    });
+    qs.setAttribute("data-testid", "settings-quality");
+    qs.onchange = function () { api.set("quality", qs.value); };
+    qr.appendChild(qs);
+    gfx.appendChild(qr);
+    toggleRow(gfx, "particles", "Particelle", "Esplosioni, coriandoli e polvere");
+    toggleRow(gfx, "shake", "Scuotimento schermo", "Vibrazione della camera agli impatti");
+    toggleRow(gfx, "trails", "Scia delle icone", "Strisce colorate dietro i personaggi");
+    toggleRow(gfx, "glow", "Glow icone", "Bagliore dell'Icon Kit, se attivo");
+    panel.appendChild(gfx);
+
+    var audio = section("Audio");
+    volumeRow(audio, "music", "Musica", "Volume della colonna sonora");
+    volumeRow(audio, "sfx", "Effetti sonori", "Portali, orb, monete e impatti");
+    panel.appendChild(audio);
+
+    var foot = el("div", "gds-foot");
+    var reset = el("button", "gds-btn danger", "Ripristina default");
+    reset.type = "button"; reset.setAttribute("data-testid", "settings-reset");
+    reset.onclick = function () { api.reset(); close(); open(); };
+    var done = el("button", "gds-btn primary", "Chiudi");
+    done.type = "button"; done.setAttribute("data-testid", "settings-done"); done.onclick = close;
+    foot.appendChild(reset); foot.appendChild(done);
+    panel.appendChild(foot);
+    modal.appendChild(panel);
+    document.body.appendChild(modal);
+    globalKey = function (e) {
+      if (e.code === "Escape" && !binding) { e.preventDefault(); close(); }
+    };
+    window.addEventListener("keydown", globalKey, true);
+  }
+  window.gdOpenSettings = open;
+  window.gdCloseSettings = close;
+})();
+</script>
 <meta charset="UTF-8">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMDBmMGZmIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjN2EzY2ZmIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMwYjEwMzAiLz48cmVjdCB4PSIxNCIgeT0iMTQiIHdpZHRoPSIzNiIgaGVpZ2h0PSIzNiIgcng9IjUiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIzIi8+PHJlY3QgeD0iMjIiIHk9IjI0IiB3aWR0aD0iNyIgaGVpZ2h0PSI3IiByeD0iMS41IiBmaWxsPSIjMGIxMDMwIi8+PHJlY3QgeD0iMzUiIHk9IjI0IiB3aWR0aD0iNyIgaGVpZ2h0PSI3IiByeD0iMS41IiBmaWxsPSIjMGIxMDMwIi8+PHJlY3QgeD0iMjIiIHk9IjM4IiB3aWR0aD0iMjAiIGhlaWdodD0iNCIgcng9IjIiIGZpbGw9IiMwYjEwMzAiLz48L3N2Zz4=">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -1049,8 +1333,18 @@ if (typeof module !== "undefined")
     }
     catch (e) { }
     var PICKED = lsGet("gd-server");
-    SERVER = (PICKED === null ? (window.GD_SERVER || "") : PICKED).replace(/\/+$/, "");
     var isLocalPage = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || location.protocol === "file:";
+    var localHttp = /^https?:$/.test(location.protocol) && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+    if (localHttp && !EXPLICIT) {
+        /* La pagina servita da un server locale usa le API di quello stesso server:
+           niente override rimasti da vecchie prove o porte diverse. */
+        SERVER = location.origin;
+        if (PICKED !== null)
+            lsSet("gd-server", null);
+    }
+    else {
+        SERVER = (PICKED === null ? (window.GD_SERVER || "") : PICKED).replace(/\/+$/, "");
+    }
     var hostOf = function (u) { try {
         return new URL(u, location.href).host;
     }
@@ -79254,6 +79548,7 @@ var AudioEngine = (function () {
         this.trackSrc = null;
         this.trackTok = 0;
         this.musicGain = null;
+        this.sfxGain = null;
         this.dest = null;
         this.limit = null;
     }
@@ -79267,6 +79562,10 @@ var AudioEngine = (function () {
             this.musicGain = this.ctx.createGain();
             this.musicGain.gain.value = 1;
             this.musicGain.connect(this.master);
+            this.sfxGain = this.ctx.createGain();
+            this.sfxGain.gain.value = 1;
+            this.sfxGain.connect(this.master);
+            if (window.GDSettings) window.GDSettings.applyAudio(this);
             var len = this.ctx.sampleRate * .5;
             this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
             var d = this.noise.getChannelData(0);
@@ -79320,6 +79619,10 @@ var AudioEngine = (function () {
     AudioEngine.prototype.setMusicVol = function (v) {
         if (this.musicGain && this.ctx)
             this.musicGain.gain.setTargetAtTime(Math.max(0, Math.min(1, v)), this.ctx.currentTime, .05);
+    };
+    AudioEngine.prototype.setSfxVol = function (v) {
+        if (this.sfxGain && this.ctx)
+            this.sfxGain.gain.setTargetAtTime(Math.max(0, Math.min(1, v)), this.ctx.currentTime, .05);
     };
     AudioEngine.prototype.playTrack = function (ctx, id, at) {
         var _this = this;
@@ -79475,6 +79778,8 @@ var AudioEngine = (function () {
     AudioEngine.prototype.sfx = function (name) {
         var _this = this;
         var ctx = this.ensure();
+        var prevDest = this.dest;
+        this.dest = this.sfxGain || this.master;
         var t = ctx.currentTime;
         switch (name) {
             case "death":
@@ -79541,10 +79846,13 @@ var AudioEngine = (function () {
                 ].forEach(function (n, i) { return _this.tone("square", _this.freq(72 + n), t + i * .1, .35, .1); });
                 break;
         }
+        this.dest = prevDest;
     };
     return AudioEngine;
 }());
 exports.audio = new AudioEngine();
+window.__gdAudio = exports.audio;
+if (window.GDSettings) window.GDSettings.applyAudio(exports.audio);
 exports.SFX_LIST = ["laser", "boom", "powerup", "zap", "alarm", "whoosh", "drum", "bell", "jump", "glitch", "click", "orb", "coin", "portal", "checkpoint", "win", "death"];
 function renderSongBuffer(seed, seconds) {
     return __awaiter(this, void 0, void 0, function () {
@@ -80287,6 +80595,8 @@ exports.OBJECTS = [
     d("portal_big", "portal", "portals", 1, 3, "#22ff66", "Normal size portal", "Portale dimensione normale"),
     d("portal_dual_on", "portal", "portals", 1, 3, "#ff7700", "Dual portal", "Portale doppio"),
     d("portal_dual_off", "portal", "portals", 1, 3, "#0088ff", "Single portal", "Portale singolo"),
+    d("portal_triple_on", "portal", "portals", 1, 3, "#ff44bb", "Triple portal", "Portale triplo"),
+    d("portal_triple_off", "portal", "portals", 1, 3, "#00f0ff", "Single portal 3", "Portale singolo 3"),
     d("portal_tp_in", "portal", "portals", 1, 3, "#0088ff", "Teleport in", "Teletrasporto (entrata)"),
     d("portal_tp_out", "portal", "portals", 1, 3, "#ff7700", "Teleport out", "Teletrasporto (uscita)"),
     d("speed_0", "speed", "speed", 1, 2, "#ffaa22", "Speed 0.8x", "Velocità 0.8x"),
@@ -80359,6 +80669,7 @@ exports.OBJECTS = [
     Object.assign(d("trigger_follow", "trigger", "groups", 1, 1, "#ffa040", "Follow trigger", "Trigger segui giocatore"), { "defaults": { "tg": 1, "xm": 1, "ym": 0, "dur": 3 } }),
     Object.assign(d("trigger_touch", "trigger", "groups", 1, 1, "#80ffb0", "Touch trigger", "Trigger tocco (tieni premuto)"), { "defaults": { "tg": 1, "on": true } }),
     Object.assign(d("trigger_gravity", "trigger", "fx", 1, 1, "#c0a0ff", "Gravity trigger", "Trigger gravità"), { "defaults": { "v": 2 } }),
+    Object.assign(d("trigger_arrow", "trigger", "triggers", 1, 1, "#ffd24a", "Arrow trigger", "Trigger freccia (direzione, gravità, canali)"), { "defaults": { "ach": 0, "chg": false, "tch": 0, "chonly": false, "sen": false, "sv": 1, "sov": false } }),
     Object.assign(d("trigger_camoff", "trigger", "fx", 1, 1, "#60d0ff", "Camera offset trigger", "Trigger offset camera"), { "defaults": { "mx": 0, "my": 0, "dur": 1 } }),
     Object.assign(d("trigger_camrot", "trigger", "fx", 1, 1, "#ff80c0", "Camera rotate trigger", "Trigger rotazione camera"), { "defaults": { "deg": 0, "dur": 1 } }),
     Object.assign(d("trigger_camstatic", "trigger", "fx", 1, 1, "#a0a0a0", "Camera static trigger", "Trigger camera statica"), { "defaults": { "lk": 1 } }),
@@ -81879,6 +82190,8 @@ function drawObject(ctx, o, px, py, u, opt) {
                 portal_big: "+",
                 portal_dual_on: "2",
                 portal_dual_off: "1",
+                portal_triple_on: "3",
+                portal_triple_off: "1",
                 portal_tp_in: "◉",
                 portal_tp_out: "◎"
             };
@@ -81955,7 +82268,7 @@ function drawObject(ctx, o, px, py, u, opt) {
             break;
         }
         case "trigger": {
-            var lab = { startpos: "SP", trigger_color: "COL", trigger_ground: "GND", trigger_music: "♪", trigger_music_stop: "■♪", trigger_volume: "VOL", trigger_sfx: "SFX", trigger_flash: "FLS", trigger_shake: "SHK", trigger_speed: "SPD", trigger_move: "MOV", trigger_rotate: "ROT", trigger_scale: "SCL", trigger_alpha: "ALP", trigger_toggle: "TOG", trigger_stop: "STP", trigger_pulse: "PLS", trigger_shader: "SHD", trigger_zoom: "ZOM", trigger_timewarp: "TWP", trigger_spawn: "SPN", collision_block: "CBK", trigger_collision: "COL", trigger_gradient: "GRD", trigger_keyframe: "KEY", trigger_follow: "FOL", trigger_touch: "TCH", trigger_gravity: "GRV", trigger_camoff: "COF", trigger_camrot: "CRT", trigger_camstatic: "CST", trigger_pickup: "PCK", trigger_count: "CNT", trigger_icount: "ICT" }[o.t] || "TRG";
+            var lab = { startpos: "SP", trigger_color: "COL", trigger_ground: "GND", trigger_music: "♪", trigger_music_stop: "■♪", trigger_volume: "VOL", trigger_sfx: "SFX", trigger_flash: "FLS", trigger_shake: "SHK", trigger_speed: "SPD", trigger_move: "MOV", trigger_rotate: "ROT", trigger_scale: "SCL", trigger_alpha: "ALP", trigger_toggle: "TOG", trigger_stop: "STP", trigger_pulse: "PLS", trigger_shader: "SHD", trigger_zoom: "ZOM", trigger_timewarp: "TWP", trigger_spawn: "SPN", collision_block: "CBK", trigger_collision: "COL", trigger_gradient: "GRD", trigger_keyframe: "KEY", trigger_follow: "FOL", trigger_touch: "TCH", trigger_gravity: "GRV", trigger_arrow: "ARW", trigger_camoff: "COF", trigger_camrot: "CRT", trigger_camstatic: "CST", trigger_pickup: "PCK", trigger_count: "CNT", trigger_icount: "ICT" }[o.t] || "TRG";
             var fc = (o.t === "trigger_color" || o.t === "trigger_ground" || o.t === "trigger_pulse") ? (o.color || def.color) : def.color;
             var trg = ctx.createRadialGradient(-W * .1, -W * .1, W * .05, 0, 0, W * .42);
             trg.addColorStop(0, shade(fc, 1.5));
@@ -81971,15 +82284,49 @@ function drawObject(ctx, o, px, py, u, opt) {
             ctx.strokeStyle = "rgba(255,255,255,.95)";
             ctx.lineWidth = lw * 1.2;
             ctx.stroke();
-            ctx.fillStyle = "#fff";
-            ctx.strokeStyle = "rgba(0,0,0,.6)";
-            ctx.lineWidth = Math.max(2, u * .05);
-            ctx.font = "700 ".concat(u * .32, "px sans-serif");
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.strokeText(lab, 0, 0);
-            ctx.fillText(lab, 0, 0);
-            var sub = o.t === "trigger_music" ? typeof o.song === "string" ? "\u266a" : "#" + (o.song || 1) : o.t === "trigger_volume" ? ((_k = o.v) !== null && _k !== void 0 ? _k : 50) + "%" : o.t === "trigger_shake" ? "x" + ((_l = o.v) !== null && _l !== void 0 ? _l : 4) : o.t === "trigger_speed" ? ["0.8x", "1x", "2x", "3x", "4x"][(_m = o.v) !== null && _m !== void 0 ? _m : 1] : o.t === "trigger_sfx" ? String(o.sfx || "laser") : o.t === "collision_block" ? "#" + ((_o = o.cid) !== null && _o !== void 0 ? _o : 1) : o.t === "trigger_collision" ? ((_p = o.a) !== null && _p !== void 0 ? _p : 0) + ">" + ((_q = o.b) !== null && _q !== void 0 ? _q : 1) : o.t === "trigger_shader" ? String(o.fx || "") : o.t === "trigger_zoom" ? ((_r = o.v) !== null && _r !== void 0 ? _r : 150) + "%" : o.t === "trigger_timewarp" ? ((_s = o.v) !== null && _s !== void 0 ? _s : 50) + "%" : (o.tg != null ? "G" + o.tg : "");
+            if (o.t === "trigger_arrow") {
+                var arrowRot = ((o.r || 0) % 4 + 4) % 4;
+                var arrowSide = arrowRot === 2 || arrowRot === 3 ? -1 : 1;
+                var arrowGrav = arrowRot === 1 || arrowRot === 2 ? -1 : 1;
+                ctx.save();
+                ctx.rotate(-arrowRot * Math.PI / 2);
+                ctx.strokeStyle = "#fff";
+                ctx.fillStyle = "#fff";
+                ctx.lineWidth = Math.max(2, u * .07);
+                ctx.lineCap = "round";
+                ctx.beginPath();
+                ctx.moveTo(-arrowSide * W * .2, 0);
+                ctx.lineTo(arrowSide * W * .08, 0);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(arrowSide * W * .05, -W * .16);
+                ctx.lineTo(arrowSide * W * .3, 0);
+                ctx.lineTo(arrowSide * W * .05, W * .16);
+                ctx.closePath();
+                ctx.fill();
+                var gy = H * .38;
+                ctx.beginPath();
+                ctx.moveTo(-W * .18, gy + arrowGrav * H * .08);
+                ctx.lineTo(W * .18, gy + arrowGrav * H * .08);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(-W * .1, gy + arrowGrav * H * .01);
+                ctx.lineTo(0, gy + arrowGrav * H * .09);
+                ctx.lineTo(W * .1, gy + arrowGrav * H * .01);
+                ctx.stroke();
+                ctx.restore();
+            }
+            else {
+                ctx.fillStyle = "#fff";
+                ctx.strokeStyle = "rgba(0,0,0,.6)";
+                ctx.lineWidth = Math.max(2, u * .05);
+                ctx.font = "700 ".concat(u * .32, "px sans-serif");
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.strokeText(lab, 0, 0);
+                ctx.fillText(lab, 0, 0);
+            }
+            var sub = o.t === "trigger_arrow" ? "CH" + (Number(o.ach) || 0) + (o.chg ? "→" + (Number(o.tch) || 0) : "") : o.t === "trigger_music" ? typeof o.song === "string" ? "\u266a" : "#" + (o.song || 1) : o.t === "trigger_volume" ? ((_k = o.v) !== null && _k !== void 0 ? _k : 50) + "%" : o.t === "trigger_shake" ? "x" + ((_l = o.v) !== null && _l !== void 0 ? _l : 4) : o.t === "trigger_speed" ? ["0.8x", "1x", "2x", "3x", "4x"][(_m = o.v) !== null && _m !== void 0 ? _m : 1] : o.t === "trigger_sfx" ? String(o.sfx || "laser") : o.t === "collision_block" ? "#" + ((_o = o.cid) !== null && _o !== void 0 ? _o : 1) : o.t === "trigger_collision" ? ((_p = o.a) !== null && _p !== void 0 ? _p : 0) + ">" + ((_q = o.b) !== null && _q !== void 0 ? _q : 1) : o.t === "trigger_shader" ? String(o.fx || "") : o.t === "trigger_zoom" ? ((_r = o.v) !== null && _r !== void 0 ? _r : 150) + "%" : o.t === "trigger_timewarp" ? ((_s = o.v) !== null && _s !== void 0 ? _s : 50) + "%" : (o.tg != null ? "G" + o.tg : "");
             if (sub) {
                 ctx.rotate(-((o.r || 0) * Math.PI) / 2);
                 ctx.fillStyle = "#fff";
@@ -82925,8 +83272,14 @@ var Engine = (function () {
         this.buckets = new Map();
         this.players = [];
         this.speed = 1;
+        this.playDir = 1;
+        this.channel = 0;
+        this.speedLock = false;
+        this.lastStep = 0;
+        this.boot = true;
         this.bounds = null;
         this.dual = false;
+        this.triple = false;
         this.mirror = false;
         this.mirrorAnim = 0;
         this.used = new Set();
@@ -82948,7 +83301,7 @@ var Engine = (function () {
         this.lastCp = 0;
         this.camY = -2;
         this.particles = [];
-        this.trails = [[], []];
+        this.trails = [[], [], []];
         this.flash = 0;
         this.shake = 0;
         this.gs = new Map();
@@ -82986,6 +83339,7 @@ var Engine = (function () {
         this.camLock = 0;
         this.camLockV = 0;
         this.spawnQ = [];
+        this.spawned = new Set();
         this.items = {};
         this.counts = [];
         this.dyn = [];
@@ -83026,6 +83380,7 @@ var Engine = (function () {
                 circle: circle,
                 coin: coins.findIndex(function (c) { return c.i === i; }),
                 broken: false,
+                hit: false,
                 bx: b[0],
                 by: b[1],
                 dx: 0,
@@ -83254,15 +83609,21 @@ var Engine = (function () {
                 second: false
             }];
         this.speed = Math.max(0, Math.min(4, (_a = st.speed) !== null && _a !== void 0 ? _a : 1));
+        this.playDir = 1;
+        this.channel = 0;
+        this.speedLock = false;
+        this.lastStep = 0;
+        this.boot = true;
         var H = BOUND_H[mode];
         this.bounds = H ? {
             floor: 0,
             ceil: H
         } : null;
         this.dual = false;
+        this.triple = false;
         this.mirror = false;
         this.used.clear();
-        this.objs.forEach(function (o) { return o.broken = false; });
+        this.objs.forEach(function (o) { o.broken = false; o.hit = false; });
         this.coins = [
             false,
             false,
@@ -83274,7 +83635,7 @@ var Engine = (function () {
         this.camY = sp ? sp.y - 2 : this.bounds ? this.bounds.floor - .5 : -2;
         this.time = 0;
         this.lastCp = 0;
-        this.trails = [[], []];
+        this.trails = [[], [], []];
         this.state = "playing";
         this.stateTime = 0;
         if (!first)
@@ -83286,6 +83647,7 @@ var Engine = (function () {
         this.gs = new Map();
         this.anims = [];
         this.spawnQ = [];
+        this.spawned.clear();
         this.items = {};
         this.counts = [];
         this.follows = [];
@@ -83300,7 +83662,7 @@ var Engine = (function () {
         this.zoom = this.zoomT = 1;
         this.pulseT = 0;
         this.applyGroups();
-        __GD47__1.audio.setMusicVol(1);
+        __GD47__1.audio.setMusicVol(window.GDSettings ? window.GDSettings.get("music") : 1);
         __GD47__1.audio.play(this.song, 0);
         if (this.practice && this.startPos && !first)
             this.restore(this.startPos, true);
@@ -83360,10 +83722,15 @@ var Engine = (function () {
         return {
             players: this.players.map(function (p) { return (__assign(__assign({}, p), { fresh: false })); }),
             speed: this.speed,
+            playDir: this.playDir,
+            channel: this.channel,
+            speedLock: this.speedLock,
             bounds: this.bounds ? __assign({}, this.bounds) : null,
             dual: this.dual,
+            triple: this.triple,
             mirror: this.mirror,
             used: __spreadArray([], __read(this.used), false),
+            spawned: __spreadArray([], __read(this.spawned), false),
             broken: this.objs.filter(function (o) { return o.broken; }).map(function (o) { return o.i; }),
             bg: this.bgTarget,
             ground: this.groundTarget,
@@ -83413,12 +83780,19 @@ var Engine = (function () {
     Engine.prototype.restore = function (s, keepAttempt) {
         this.players = s.players.map(function (p) { return (__assign({}, p)); });
         this.speed = s.speed;
+        this.playDir = s.playDir === -1 ? -1 : 1;
+        this.channel = Math.max(0, Number(s.channel) || 0);
+        this.speedLock = !!s.speedLock;
+        this.lastStep = 0;
+        this.boot = false;
         this.bounds = s.bounds ? __assign({}, s.bounds) : null;
         this.dual = s.dual;
+        this.triple = !!s.triple;
         this.mirror = s.mirror;
         this.used = new Set(s.used);
+        this.spawned = new Set(s.spawned || []);
         var br = new Set(s.broken);
-        this.objs.forEach(function (o) { return o.broken = br.has(o.i) && o.def.kind !== "coin"; });
+        this.objs.forEach(function (o) { o.broken = br.has(o.i) && o.def.kind !== "coin"; o.hit = false; });
         this.bg = this.bgTarget = s.bg;
         this.noBg = !!s.noBg;
         this.ground = this.groundTarget = s.ground;
@@ -83446,7 +83820,7 @@ var Engine = (function () {
             else
                 __GD47__1.audio.play(sg, songAt);
         }
-        this.trails = [[], []];
+        this.trails = [[], [], []];
         this.state = "playing";
         this.stateTime = 0;
         if (!keepAttempt)
@@ -83614,6 +83988,7 @@ var Engine = (function () {
         p.dash = false;
     };
     Engine.prototype.burst = function (x, y, color, n, spd, life) {
+        if (window.GDSettings && !GDSettings.get("particles")) return;
         if (spd === void 0) { spd = 6; }
         if (life === void 0) { life = .6; }
         for (var k = 0; k < n; k++) {
@@ -83762,7 +84137,15 @@ var Engine = (function () {
                 }
             }
             else if (kind === "trigger") {
-                if (p.x + s >= o.o.x && !o.o.sp && !this_1.used.has(key) && !p.second) {
+                var prevX = p.x - (this_1.lastStep || 0);
+                var ow = Number(o.o.w) || 1;
+                var trigHit = o.o.touch ? overlap(box, ob) : (this_1.playDir >= 0 ? (prevX + s < o.o.x && p.x + s >= o.o.x) : (prevX > o.o.x + ow && p.x <= o.o.x + ow));
+                var bootHit = this_1.boot && this_1.playDir > 0 && o.o.x <= p.x + s && o.o.x + ow >= p.x;
+                var trigFresh = o.o.touch ? trigHit && !o.hit : (trigHit || bootHit);
+                var chanOk = (Number(o.o.ach) || 0) === (this_1.channel | 0);
+                if (o.o.touch)
+                    o.hit = trigHit;
+                if (trigFresh && (!o.o.sp || o.o.touch) && (chanOk || o.o.sp) && (!this_1.used.has(key) || o.o.multi) && !p.second) {
                     this_1.used.add(key);
                     var fire_1 = function (to) {
                         var e_19, _a, e_20, _b, _c;
@@ -83835,7 +84218,7 @@ var Engine = (function () {
                                 break;
                             }
                             case "trigger_spawn":
-                                _this.spawnGroup((_v = to.tg) !== null && _v !== void 0 ? _v : 1, (_w = to.delay) !== null && _w !== void 0 ? _w : 0);
+                                _this.spawnGroup((_v = to.tg) !== null && _v !== void 0 ? _v : 1, (_w = to.delay) !== null && _w !== void 0 ? _w : 0, { dv: to.dv || 0, ordered: !!to.ordered });
                                 break;
                             case "trigger_pickup":
                                 _this.items[(_x = to.item) !== null && _x !== void 0 ? _x : 1] = (_this.items[(_y = to.item) !== null && _y !== void 0 ? _y : 1] || 0) + ((_z = to.n) !== null && _z !== void 0 ? _z : 1);
@@ -83928,8 +84311,30 @@ var Engine = (function () {
                             case "trigger_timewarp":
                                 _this.warp = Math.max(.1, Math.min(3, ((_22 = to.v) !== null && _22 !== void 0 ? _22 : 50) / 100));
                                 break;
+                            case "trigger_arrow": {
+                                var arot = ((to.r || 0) % 4 + 4) % 4;
+                                if (!to.chonly) {
+                                    _this.playDir = arot === 2 || arot === 3 ? -1 : 1;
+                                    var agrav = arot === 1 || arot === 2 ? -1 : 1;
+                                    _this.players.forEach(function (q) {
+                                        if (q.grav !== agrav) {
+                                            q.grav = agrav;
+                                            q.vy *= .5;
+                                            q.onGround = false;
+                                        }
+                                    });
+                                    if (to.sen || to.sov) {
+                                        _this.speed = Math.max(0, Math.min(4, Number(to.sv) || 0));
+                                        _this.speedLock = !!to.sov;
+                                    }
+                                }
+                                if (to.chg)
+                                    _this.channel = Math.max(0, Math.min(9999, Math.floor(Number(to.tch) || 0)));
+                                break;
+                            }
                             case "trigger_speed":
-                                _this.speed = Math.max(0, Math.min(4, (_23 = to.v) !== null && _23 !== void 0 ? _23 : 1));
+                                if (!_this.speedLock)
+                                    _this.speed = Math.max(0, Math.min(4, (_23 = to.v) !== null && _23 !== void 0 ? _23 : 1));
                                 break;
                             default:
                                 if (to.color) {
@@ -84067,7 +84472,7 @@ var Engine = (function () {
         var self = this;
         if (t.startsWith("speed_")) {
             var ns = Number(t.slice(6));
-            if (isFinite(ns))
+            if (isFinite(ns) && !this.speedLock)
                 this.speed = Math.max(0, Math.min(4, ns));
             return;
         }
@@ -84129,11 +84534,42 @@ var Engine = (function () {
                     this.trails[1] = [];
                 }
                 break;
+            case "portal_triple_on":
+                if (!this.dual) {
+                    this.dual = true;
+                    this.setBoundsFrom(o, p.mode);
+                    var tb = this.bounds;
+                    var tq = __assign(__assign({}, p), { second: true, grav: p.grav === 1 ? -1 : 1, y: tb.floor + tb.ceil - p.y - s, vy: -p.vy, onGround: false });
+                    this.players = [p.second ? this.players[0] : p, tq];
+                    this.trails[1] = [];
+                }
+                if (!this.triple) {
+                    this.triple = true;
+                    if (this.players.length < 3) {
+                        var base3 = this.players[0];
+                        var p3 = __assign({}, base3, { x: Math.max(0, base3.x - 1.25), second: false, third: true });
+                        this.players.push(p3);
+                        this.trails[2] = [];
+                    }
+                }
+                break;
+            case "portal_triple_off":
+                if (this.triple) {
+                    this.triple = false;
+                    var only3 = this.players.find(function (q) { return !q.second && !q.third; }) || this.players[0];
+                    this.players = [only3];
+                    this.dual = false;
+                    this.trails = [[], [], []];
+                    this.setBoundsFrom(o, only3.mode);
+                }
+                break;
             case "portal_dual_off":
                 if (this.dual) {
                     this.dual = false;
-                    var keep = this.players.find(function (q) { return !q.second; });
+                    this.triple = false;
+                    var keep = this.players.find(function (q) { return !q.second && !q.third; }) || this.players[0];
                     this.players = [keep];
+                    this.trails = [[], [], []];
                     this.setBoundsFrom(o, keep.mode);
                 }
                 break;
@@ -84475,13 +84911,25 @@ var Engine = (function () {
         else
             p.rot = 0;
     };
-    Engine.prototype.spawnGroup = function (tg, delay) {
+    Engine.prototype.spawnGroup = function (tg, delay, opts) {
         var e_26, _a;
+        opts = opts || {};
+        var list = (this.gmap.get(tg) || []).filter(function (r) { return r.def.kind === "trigger"; });
+        if (opts.ordered)
+            list = list.slice().sort(function (a, b) { return a.x - b.x; });
         try {
-            for (var _b = __values(this.gmap.get(tg) || []), _c = _b.next(); !_c.done; _c = _b.next()) {
+            for (var _b = __values(list), _c = _b.next(); !_c.done; _c = _b.next()) {
                 var r = _c.value;
-                if (r.def.kind === "trigger")
-                    this.spawnQ.push({ t: this.time + Math.max(0, delay || 0), to: r.o });
+                var key = "s" + r.i;
+                if (!r.o.multi && this.spawned.has(key))
+                    continue;
+                this.spawned.add(key);
+                var d = Math.max(0, delay || 0);
+                if (opts.dv)
+                    d = Math.max(0, d + (Math.random() * 2 - 1) * opts.dv);
+                if (opts.ordered)
+                    d += Math.max(0, r.x - (list[0] ? list[0].x : r.x)) / Math.max(1, __GD52__1.SPEEDS[this.speed] || 1);
+                this.spawnQ.push({ t: this.time + d, to: r.o });
             }
         }
         catch (e_26_1) { e_26 = { error: e_26_1 }; }
@@ -84716,10 +85164,13 @@ var Engine = (function () {
             finally { if (e_37) throw e_37.error; }
         }
         var spd = __GD52__1.SPEEDS[this.speed];
+        this.lastStep = spd * h * this.playDir;
         try {
             for (var _0 = __values(this.players), _1 = _0.next(); !_1.done; _1 = _0.next()) {
                 var p = _1.value;
-                p.x += spd * h;
+                p.x += this.lastStep;
+                if (p.x < 0)
+                    p.x = 0;
             }
         }
         catch (e_38_1) { e_38 = { error: e_38_1 }; }
@@ -84731,6 +85182,7 @@ var Engine = (function () {
         }
         for (var i = 0; i < this.players.length && this.state === "playing"; i++)
             this.interact(this.players[i], i);
+        this.boot = false;
         if (this.state !== "playing")
             return;
         try {
@@ -84762,9 +85214,10 @@ var Engine = (function () {
         }
         if (this.state !== "playing")
             return;
+        var trailOn = !window.GDSettings || GDSettings.get("trails");
         this.players.forEach(function (p, i) {
             var tr = _this.trails[i];
-            if (p.mode === "wave") {
+            if (trailOn && p.mode === "wave") {
                 tr.push({
                     x: p.x + _this.size(p) / 2,
                     y: p.y + _this.size(p) / 2
@@ -84855,7 +85308,7 @@ var Engine = (function () {
         var u = H / 11 * this.zoom;
         var p0 = this.players[0];
         var viewW = W / u;
-        var camX = p0.x - viewW * .32 + this.coX;
+        var camX = p0.x - viewW * (this.playDir < 0 ? .68 : .32) + this.coX;
         if (this.camLock === 1) {
             this.camLockV = camX;
             this.camLock = 2;
@@ -84873,7 +85326,7 @@ var Engine = (function () {
             ctx.scale(1.35, 1.35);
             ctx.translate(-W / 2, -H / 2);
         }
-        if (this.shake > 0) {
+        if (this.shake > 0 && (!window.GDSettings || GDSettings.get("shake"))) {
             var sa = this.shakeAmp * .02 * u * Math.min(1, this.shake * 3);
             ctx.translate((Math.random() - .5) * 2 * sa, (Math.random() - .5) * 2 * sa);
         }
@@ -84982,7 +85435,7 @@ var Engine = (function () {
         }
         var ic = this.opts.icons;
         this.trails.forEach(function (tr) {
-            if (tr.length < 2)
+            if (tr.length < 2 || (window.GDSettings && !GDSettings.get("trails")))
                 return;
             ctx.beginPath();
             tr.forEach(function (pt, k) { return k ? ctx.lineTo(sx(pt.x), sy(pt.y)) : ctx.moveTo(sx(pt.x), sy(pt.y)); });
@@ -85003,7 +85456,7 @@ var Engine = (function () {
                     (0, __GD49__1.drawIcon)(ctx, p.mode, ic.icons[p.mode] || 1, sx(p.x + s / 2), sy(p.y + s / 2), drawS * u, p.rot, {
                         c1: c1,
                         c2: c2,
-                        glow: ic.glow,
+                        glow: ic.glow && (!window.GDSettings || GDSettings.get("glow")),
                         t: this.time,
                         cubeId: ic.icons.cube,
                         flip: flip
@@ -85030,8 +85483,10 @@ var Engine = (function () {
                 finally { if (e_43) throw e_43.error; }
             }
         }
+        var particlesOn = !window.GDSettings || GDSettings.get("particles");
         try {
             for (var _g = __values(this.particles), _h = _g.next(); !_h.done; _h = _g.next()) {
+                if (!particlesOn) break;
                 var pt = _h.value;
                 ctx.globalAlpha = Math.max(0, pt.life / pt.max);
                 ctx.fillStyle = pt.color;
@@ -85400,6 +85855,11 @@ function GameCanvas(_a) {
             onCheckpoint: function (n) { return setCps(n); }
         });
         engRef.current = eng;
+        var onSettingsOpen = function () {
+            if (!pausedRef.current && finished === null)
+                togglePause();
+        };
+        window.addEventListener("gd-settings-open", onSettingsOpen);
         var capUsed = 0;
         var resize = function () {
             var cap = window.__gdDprCap ? window.__gdDprCap() : 2;
@@ -85437,20 +85897,27 @@ function GameCanvas(_a) {
             raf = requestAnimationFrame(loop);
         };
         raf = requestAnimationFrame(loop);
-        var isJump = function (e) { return e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW"; };
+        var bind = function (k, d) { return window.GDSettings ? GDSettings.get(k) : d; };
+        var isJump = function (e) {
+            var jk = bind("jumpKey", "Space");
+            return e.code === jk || (jk === "Space" && (e.code === "ArrowUp" || e.code === "KeyW"));
+        };
         var kd = function (e) {
+            if (window.gdSettingsOpen)
+                return;
+            var pauseK = bind("pauseKey", "Escape");
             if (isJump(e)) {
                 e.preventDefault();
                 if (!e.repeat && !pausedRef.current && finished === null)
                     eng.press();
             }
-            else if (e.code === "Escape" || e.code === "KeyP")
+            else if (e.code === pauseK || (pauseK === "Escape" && e.code === "KeyP"))
                 togglePause();
-            else if (e.code === "KeyR" && !pausedRef.current)
+            else if (e.code === bind("restartKey", "KeyR") && !pausedRef.current)
                 eng.respawn();
-            else if (e.code === "KeyZ")
+            else if (e.code === bind("checkpointKey", "KeyZ"))
                 eng.addCheckpoint();
-            else if (e.code === "KeyX")
+            else if (e.code === bind("removeCheckpointKey", "KeyX"))
                 eng.removeCheckpoint();
         };
         var ku = function (e) {
@@ -85471,6 +85938,7 @@ function GameCanvas(_a) {
         return function () {
             cancelAnimationFrame(raf);
             window.removeEventListener("resize", resize);
+            window.removeEventListener("gd-settings-open", onSettingsOpen);
             window.removeEventListener("keydown", kd);
             window.removeEventListener("keyup", ku);
             cv.removeEventListener("pointerdown", pd);
@@ -85974,6 +86442,14 @@ function GameCanvas(_a) {
                                     lineNumber: 196,
                                     columnNumber: 15
                                 }, this),
+                                _jsxDEV("button", {
+                                    className: "gd-btn col-span-2 bg-[#1a2234] text-white",
+                                    onClick: function () { if (window.gdOpenSettings) window.gdOpenSettings(); },
+                                    "data-testid": "pause-settings-button",
+                                    children: [_jsxDEV(__GD61__1.Settings, {
+                                            className: "size-4"
+                                        }, void 0, false, {}, void 0), "Impostazioni"]
+                                }, void 0, true, {}, void 0),
                                 allowPractice && _jsxDEV("button", {
                                     className: "gd-btn col-span-2 bg-[#1a2234] text-[#00ff66]",
                                     onClick: switchPractice,
@@ -96744,6 +97220,16 @@ function TopBar() {
                         columnNumber: 9
                     }, this),
                     _jsxDEV("button", {
+                        className: "rounded-full border border-white/10 bg-black/40 p-2 text-white hover:border-[#00f0ff] transition-colors duration-200",
+                        onClick: function () { if (window.gdOpenSettings) window.gdOpenSettings(); },
+                        "aria-label": "Impostazioni",
+                        "title": "Impostazioni",
+                        "data-testid": "settings-open",
+                        children: _jsxDEV(__GD61__1.Settings, {
+                            className: "size-4"
+                        }, void 0, false, {}, void 0)
+                    }, void 0, false, {}, void 0),
+                    _jsxDEV("button", {
                         className: "flex items-center gap-1 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-white hover:border-[#00f0ff] transition-colors duration-200",
                         onClick: function () { return (0, __GD59__1.setLang)((0, __GD59__1.getLang)() === "it" ? "en" : "it"); },
                         "data-testid": "lang-toggle",
@@ -97779,7 +98265,7 @@ function MusicPicker(_a) {
             stopPrev();
             return;
         }
-        __GD47__1.audio.setMusicVol(1);
+        __GD47__1.audio.setMusicVol(window.GDSettings ? window.GDSettings.get("music") : 1);
         __GD47__1.audio.play(value);
         pl.current = true;
         setPlaying(true);
@@ -98150,6 +98636,8 @@ function gdEncodeLevel(data, defs) {
                     break;
                 case "trigger_spawn":
                     p.push(51, tg, 63, (_m = o.delay) !== null && _m !== void 0 ? _m : 0);
+                    if (o.editorDisable)
+                        p.push(102, 1);
                     break;
                 case "trigger_pickup":
                     p.push(80, (_o = o.item) !== null && _o !== void 0 ? _o : 1, 77, (_p = o.n) !== null && _p !== void 0 ? _p : 1);
@@ -98169,7 +98657,17 @@ function gdEncodeLevel(data, defs) {
                 }
                 case "trigger_pulse": {
                     var c = gdRgb(o.color);
-                    p.push(7, c[0], 8, c[1], 9, c[2], 45, 0, 46, gdNum((_t = o.dur) !== null && _t !== void 0 ? _t : .6), 47, 0, 51, 1000, 52, 0);
+                    p.push(7, c[0], 8, c[1], 9, c[2], 45, 0, 46, gdNum((_t = o.dur) !== null && _t !== void 0 ? _t : .6), 47, 0);
+                    if (o.tg)
+                        p.push(51, o.tg, 52, 1);
+                    else
+                        p.push(51, 1000, 52, 0);
+                    if (o.mainOnly)
+                        p.push(65, 1);
+                    if (o.detailOnly)
+                        p.push(66, 1);
+                    if (o.exclusive)
+                        p.push(86, 1);
                     break;
                 }
                 case "trigger_move":
@@ -98201,8 +98699,12 @@ function gdEncodeLevel(data, defs) {
                     break;
                 default: break;
             }
+            if (o.touch)
+                p.push(11, 1);
             if (o.sp)
                 p.push(62, 1);
+            if (o.multi)
+                p.push(87, 1);
             if (Array.isArray(o.grp) && o.grp.length)
                 p.push(57, o.grp.join("."));
             out.push(p.join(",") + ";");
@@ -98374,11 +98876,15 @@ function gdDecodeLevel(str, defs) {
             else
                 gdPlace(o, K[1]);
         }
-        else if (t === "trigger_pulse" && (K[52] === "1" || (K[51] !== "1000" && K[51] !== "1001")))
-            gdPlace(o, K[1]);
         else if (t === "trigger_pulse") {
             o.color = gdHex(+K[7], +K[8], +K[9]);
             o.dur = gdNum((parseFloat(K[45]) || 0) + (parseFloat(K[46]) || 0) + (parseFloat(K[47]) || 0)) || .6;
+            var ptg = parseInt(K[51], 10);
+            if (isFinite(ptg) && ptg > 0 && ptg !== 1000 && ptg !== 1001)
+                o.tg = ptg;
+            o.mainOnly = K[65] === "1";
+            o.detailOnly = K[66] === "1";
+            o.exclusive = K[86] === "1";
         }
         else if (t === "trigger_move") {
             o.tg = tg > 0 ? tg : 1;
@@ -98450,6 +98956,7 @@ function gdDecodeLevel(str, defs) {
         else if (t === "trigger_spawn") {
             o.tg = tg > 0 ? tg : 1;
             o.delay = parseFloat(K[63]) || 0;
+            o.editorDisable = K[102] === "1";
         }
         else if (t === "trigger_pickup") {
             o.item = parseInt(K[80], 10) || 1;
@@ -98471,8 +98978,14 @@ function gdDecodeLevel(str, defs) {
             o.v = Math.round(parseFloat(K[75]) || 4);
         else if (t === "trigger_timewarp")
             o.v = Math.round((parseFloat(K[120]) || 1) * 100);
-        if (K[62] === "1" && def.kind === "trigger")
-            o.sp = true;
+        if (def.kind === "trigger") {
+            if (K[11] === "1")
+                o.touch = true;
+            if (K[62] === "1")
+                o.sp = true;
+            if (K[87] === "1")
+                o.multi = true;
+        }
         objects.push(o);
         if (K[1] === "747") {
             var off = parseFloat(K[54]) || 0;
@@ -98688,7 +99201,7 @@ function SongTools(_a) {
             setPlaying(false);
             return;
         }
-        __GD47__1.audio.setMusicVol(1);
+        __GD47__1.audio.setMusicVol(window.GDSettings ? window.GDSettings.get("music") : 1);
         __GD47__1.audio.play(s);
         pl.current = true;
         setPlaying(true);
@@ -98805,7 +99318,7 @@ var TP = {
     trigger_alpha: [_G, ["al", "Opacità %", "Opacity %", 0, 0, 100, 5], _D, ["ease"]],
     trigger_toggle: [_G, ["on"]],
     trigger_stop: [_G],
-    trigger_pulse: [["dur", "Durata (s)", "Time (s)", .6, .1, 10, .1]],
+    trigger_pulse: [["tg", "Gruppo (0 = canale colore)", "Group (0 = color channel)", 0, 0, 9999, 1], ["dur", "Durata (s)", "Time (s)", .6, .1, 10, .1], ["mainOnly"], ["detailOnly"], ["exclusive"]],
     trigger_shader: [["fx"], ["v", "Intensità % (0 = spegni)", "Strength % (0 = off)", 100, 0, 100, 5]],
     trigger_zoom: [["v", "Zoom %", "Zoom %", 150, 25, 300, 5], ["dur", "Durata (s)", "Time (s)", 1, .1, 20, .1]],
     trigger_timewarp: [["v", "Velocità del tempo %", "Time speed %", 50, 25, 300, 5]],
@@ -98819,7 +99332,7 @@ var TP = {
     trigger_camoff: [["mx", "Offset X (blocchi)", "Offset X (blocks)", 0, -100, 100, .5], ["my", "Offset Y (blocchi)", "Offset Y (blocks)", 0, -100, 100, .5], _D],
     trigger_camrot: [["deg", "Gradi", "Degrees", 0, -3600, 3600, 5], _D],
     trigger_camstatic: [["lk", "Camera bloccata (1 = sì, 0 = sblocca)", "Camera locked (1 = yes, 0 = release)", 1, 0, 1, 1]],
-    trigger_spawn: [_G, ["delay", "Ritardo (s)", "Delay (s)", 0, 0, 60, .1]],
+    trigger_spawn: [_G, ["delay", "Ritardo (s)", "Delay (s)", 0, 0, 60, .0001], ["dv", "Varianza (s)", "Variance (s)", 0, 0, 60, .0001]],
     trigger_pickup: [["item", "ID contatore", "Item ID", 1, 1, 9999, 1], ["n", "Quantità aggiunta", "Amount added", 1, -9999, 9999, 1]],
     trigger_count: [["item", "ID contatore", "Item ID", 1, 1, 9999, 1], ["n", "Quando arriva a", "When it reaches", 1, 0, 9999, 1], _G, ["on"]],
     trigger_icount: [["item", "ID contatore", "Item ID", 1, 1, 9999, 1], ["n", "Valore da confrontare", "Value to compare", 1, 0, 9999, 1], ["mode", "Confronto (0 uguale, 1 maggiore, 2 minore)", "Compare (0 =, 1 >, 2 <)", 0, 0, 2, 1], _G, ["on"]]
@@ -98832,7 +99345,7 @@ function CardTitle(_a) {
 function ParamEditor(_a) {
     var s = _a.s, def = _a.def, lang = _a.lang, updateSel = _a.updateSel;
     var T = function (a, b) { return lang === "it" ? a : b; };
-    var rows = (TP[s.t] || []).concat(TP[s.t] ? [["sp"]] : []);
+    var rows = TP[s.t] || [];
     var out = [];
     rows.forEach(function (r, i) {
         var _a, _b;
@@ -98847,6 +99360,8 @@ function ParamEditor(_a) {
             out.push(__h("label", { key: k, style: __assign(__assign({}, UI.label), { display: "grid", gap: 4 }) }, T("Percorso: dx,dy,secondi; ... (blocchi)", "Path: dx,dy,seconds; ... (blocks)"), __h("input", { type: "text", value: s.kf || "", style: UI.input, onChange: function (e) { return updateSel({ kf: e.target.value }); }, "data-testid": "trg-kf" })));
         else if (k === "sp")
             out.push(__h("label", { key: k, style: UI.label }, __h("input", { type: "checkbox", checked: !!s.sp, onChange: function (e) { return updateSel({ sp: e.target.checked }); }, "data-testid": "trg-sp" }), T("Solo da Spawn/Conteggio (non parte da solo)", "Spawn/count only (does not fire by itself)")));
+        else if (k === "mainOnly" || k === "detailOnly" || k === "exclusive")
+            out.push(__h("label", { key: k, style: UI.label }, __h("input", { type: "checkbox", checked: !!s[k], onChange: function (e) { var _c; return updateSel((_c = {}, _c[k] = e.target.checked, _c)); }, "data-testid": "trg-" + k }), k === "mainOnly" ? T("Main only", "Main only") : k === "detailOnly" ? T("Detail only", "Detail only") : T("Esclusivo", "Exclusive")));
         else if (k === "on")
             out.push(__h("label", { key: k, style: UI.label }, __h("input", { type: "checkbox", checked: !!s.on, onChange: function (e) { return updateSel({ on: e.target.checked }); }, "data-testid": "trg-on" }), s.on ? T("Mostra gli oggetti del gruppo", "Show the group's objects") : T("Nascondi gli oggetti del gruppo", "Hide the group's objects")));
         else {
@@ -98861,6 +99376,65 @@ function ParamEditor(_a) {
         }
     });
     return out;
+}
+function SpawnGroupDialog(p) {
+    var s = p.s, lang = p.lang, u = p.updateSel;
+    var T = function (a, b) { return lang === "it" ? a : b; };
+    if (!s)
+        return null;
+    var num = function (v, d) { var n = Number(v); return Number.isFinite(n) ? n : d; };
+    var tg = Math.max(0, Math.min(9999, Math.round(num(s.tg, 1))));
+    var delay = Math.max(0, num(s.delay, 0));
+    var dv = Math.max(0, num(s.dv, 0));
+    var set = function (patch) { u(patch); };
+    var tgl = function (k, it, en) { return __h("label", { key: k, style: { display: "flex", alignItems: "center", gap: 8, fontWeight: 800, color: "#fff", textShadow: "0 1px 0 #3a1a0c" } }, __h("input", { type: "checkbox", checked: !!s[k], onChange: function (e) { var _a; return set((_a = {}, _a[k] = e.target.checked, _a)); }, "data-testid": "spawn-" + k, style: { width: 26, height: 26, accentColor: "#00e676" } }), T(it, en)); };
+    var field = function (k, label, value, min, max, step) { return __h("label", { key: k, style: { display: "grid", gap: 4, fontWeight: 800, color: "#ffe600", textShadow: "0 1px 0 #3a1a0c" } }, T(label, label), __h("input", { type: "number", min: min, max: max, step: step, value: value, onChange: function (e) { var _a; var v = Math.max(min, Math.min(max, Number(e.target.value) || 0)); return set((_a = {}, _a[k] = v, _a)); }, "data-testid": "spawn-" + k, style: { width: "100%", boxSizing: "border-box", borderRadius: 6, border: "3px solid #00c8b4", background: "#00d8c8", color: "#062a26", fontWeight: 900, padding: "7px 8px", fontSize: 16 } })); };
+    return __h("div", { style: { position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,.65)", display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }, onClick: function (e) { if (e.target === e.currentTarget) p.onClose(); }, "data-testid": "spawn-group-dialog" }, __h("div", { style: { width: "100%", maxWidth: 700, borderRadius: 16, border: "4px solid #3a1a0c", background: "linear-gradient(160deg,#a85a32,#7c3d1f)", boxShadow: "0 18px 60px rgba(0,0,0,.55)", padding: 18, color: "#fff" }, onClick: function (e) { return e.stopPropagation(); } }, [
+        __h("div", { key: "t", style: { textAlign: "center", fontSize: 26, fontWeight: 900, letterSpacing: 2, textShadow: "0 2px 0 #3a1a0c", marginBottom: 14 } }, "SPAWN GROUP"),
+        __h("div", { key: "g", style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } }, [
+            __h("div", { key: "id", style: { display: "grid", gap: 6 } }, [
+                __h("div", { key: "l", style: { color: "#ffe600", fontWeight: 900, textAlign: "center", textShadow: "0 1px 0 #3a1a0c" } }, T("GROUP ID", "GROUP ID")),
+                __h("div", { key: "r", style: { display: "flex", alignItems: "center", gap: 6, justifyContent: "center" } }, [
+                    __h("button", { key: "m", type: "button", onClick: function () { return set({ tg: Math.max(0, tg - 1) }); }, "data-testid": "spawn-tg-minus", style: { width: 34, height: 34, borderRadius: 6, border: "2px solid #3a1a0c", background: "#ffd34d", fontWeight: 900 } }, "−"),
+                    __h("input", { key: "i", type: "number", min: 0, max: 9999, value: tg, onChange: function (e) { return set({ tg: Math.max(0, Math.min(9999, Math.round(Number(e.target.value) || 0))) }); }, "data-testid": "spawn-tg", style: { width: 100, textAlign: "center", borderRadius: 6, border: "3px solid #00c8b4", background: "#00d8c8", color: "#062a26", fontWeight: 900, padding: "6px", fontSize: 18 } }),
+                    __h("button", { key: "p", type: "button", onClick: function () { return set({ tg: Math.min(9999, tg + 1) }); }, "data-testid": "spawn-tg-plus", style: { width: 34, height: 34, borderRadius: 6, border: "2px solid #3a1a0c", background: "#ffd34d", fontWeight: 900 } }, "+"),
+                    __h("button", { key: "s", type: "button", title: T("Seleziona il gruppo", "Select group"), onClick: function () { return p.selectGroup && p.selectGroup(tg); }, "data-testid": "spawn-tg-select", style: { width: 34, height: 34, borderRadius: 6, border: "2px solid #3a1a0c", background: "#8cff4d", fontWeight: 900 } }, "⌕")
+                ])
+            ]),
+            __h("div", { key: "opts", style: { display: "grid", gap: 8, alignContent: "start" } }, [
+                tgl("editorDisable", "PREVIEW DISABLE", "PREVIEW DISABLE"),
+                tgl("ordered", "SPAWN ORDERED", "SPAWN ORDERED"),
+                tgl("resetRemap", "RESET REMAP", "RESET REMAP")
+            ])
+        ]),
+        __h("div", { key: "d", style: { display: "grid", gridTemplateColumns: "auto 1fr auto 1fr", gap: 8, alignItems: "end", marginTop: 14 } }, [
+            __h("span", { key: "l1", style: { color: "#ffe600", fontWeight: 900 } }, T("Delay:", "Delay:")),
+            field("delay", "Delay", delay, 0, 60, .0001),
+            __h("span", { key: "l2", style: { color: "#ffe600", fontWeight: 900 } }, "+-"),
+            field("dv", "Variance", dv, 0, 60, .0001)
+        ]),
+        __h("div", { key: "b", style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 16 } }, [
+            tgl("touch", "TOUCH TRIGGER", "TOUCH TRIGGER"),
+            tgl("sp", "SPAWN TRIGGER", "SPAWN TRIGGER"),
+            tgl("multi", "MULTI TRIGGER", "MULTI TRIGGER")
+        ]),
+        __h("div", { key: "ok", style: { display: "flex", justifyContent: "center", marginTop: 16 } }, __h("button", { type: "button", onClick: p.onClose, "data-testid": "spawn-ok", style: { minWidth: 160, borderRadius: 10, border: "3px solid #1f6b16", background: "linear-gradient(#8cff4d,#36c22a)", color: "#073b06", fontWeight: 900, fontSize: 20, padding: "8px 18px", textShadow: "0 1px 0 #b9ff9e" } }, "OK"))
+    ]));
+}
+function TriggerOptions(p) {
+    var s = p.s, lang = p.lang, u = p.updateSel;
+    var T = function (a, b) { return lang === "it" ? a : b; };
+    var def = s ? __GD52__1.DEF[s.t] : null;
+    if (!s || !def || def.kind !== "trigger")
+        return null;
+    var chk = function (k, it, en) { return __h("label", { key: k, style: UI.label }, __h("input", { type: "checkbox", checked: !!s[k], onChange: function (e) { var _a; return u((_a = {}, _a[k] = e.target.checked, _a)); }, "data-testid": "trg-" + k }), T(it, en)); };
+    return __h("div", { style: { display: "grid", gap: 6, borderTop: "1px solid rgba(255,255,255,.12)", paddingTop: 8 }, "data-testid": "editor-trigger-options" }, [
+        __h("label", { key: "ach", style: UI.label }, T("Canale attivo (CH)", "Active channel (CH)"), __h("input", { type: "number", min: 0, max: 9999, value: Number(s.ach) || 0, onChange: function (e) { return u({ ach: Math.max(0, Math.min(9999, Math.floor(Number(e.target.value) || 0))) }); }, style: __assign(__assign({}, UI.input), { width: 90 }), "data-testid": "trg-ach" })),
+        chk("touch", "Touch Trigger (si attiva toccandolo)", "Touch Trigger (fires on contact)"),
+        chk("sp", "Spawn Trigger (attivato solo da uno Spawn)", "Spawn Trigger (only from a Spawn)"),
+        chk("multi", "Multi Trigger (più attivazioni)", "Multi Trigger (multiple activations)"),
+        s.t === "trigger_spawn" ? __h("button", { key: "es", type: "button", style: UI.btnOn, onClick: function () { return p.openSpecial && p.openSpecial(); }, "data-testid": "trg-edit-special" }, T("Edit Special — Spawn Group", "Edit Special — Spawn Group")) : null
+    ]);
 }
 function InfoPanel(p) {
     var _a, _b, _d, _e, _f, _g, _h, _j, _k;
@@ -98893,8 +99467,24 @@ function InfoPanel(p) {
         kids.push(__h("label", { key: "sh", style: UI.label }, T("Intensità", "Strength") + " " + ((_g = s.v) !== null && _g !== void 0 ? _g : 4), __h("input", { type: "range", min: 1, max: 10, value: (_h = s.v) !== null && _h !== void 0 ? _h : 4, onChange: function (e) { return p.updateSel({ v: Number(e.target.value) }); }, "data-testid": "editor-trigger-shake" })));
     if (s.t === "trigger_speed")
         kids.push(__h("select", { key: "sp", value: (_j = s.v) !== null && _j !== void 0 ? _j : 1, onChange: function (e) { return p.updateSel({ v: Number(e.target.value) }); }, style: UI.input, "data-testid": "editor-trigger-speed" }, ["0.8x", "1x", "2x", "3x", "4x"].map(function (n, i) { return __h("option", { key: n, value: i, style: { color: "#000" } }, T("Velocità ", "Speed ") + n); })));
+    if (s.t === "trigger_arrow") {
+        var arrowRot = ((s.r || 0) % 4 + 4) % 4;
+        var arrowDir = arrowRot === 2 || arrowRot === 3 ? T("sinistra", "left") : T("destra", "right");
+        var arrowGrav = arrowRot === 1 || arrowRot === 2 ? T("invertita", "flipped") : T("normale", "normal");
+        kids.push(__h("div", { key: "arw", style: UI.col }, __h("p", { style: { fontWeight: 700, margin: 0 } }, "Arrow Trigger"), __h("p", { style: __assign(__assign({}, UI.mono), { margin: 0 }) }, T("Direzione: ", "Direction: ") + arrowDir + " · " + T("Gravità: ", "Gravity: ") + arrowGrav), __h("p", { style: { fontSize: 11, color: "rgba(255,255,255,.55)", margin: "4px 0" } }, T("Ruota l'oggetto per cambiare direzione e gravità: 0° destra/normale, 90° destra/invertita, 180° sinistra/invertita, 270° sinistra/normale.", "Rotate the object to change direction and gravity: 0° right/normal, 90° right/flipped, 180° left/flipped, 270° left/normal."))));
+        kids.push(__h("label", { key: "asen", style: UI.label }, __h("input", { type: "checkbox", checked: !!s.sen, onChange: function (e) { return p.updateSel({ sen: e.target.checked }); }, "data-testid": "editor-arrow-speed-on" }), T(" Cambia velocità", " Change speed")));
+        kids.push(__h("select", { key: "asv", value: Number(s.sv) || 0, disabled: !s.sen, onChange: function (e) { return p.updateSel({ sv: Number(e.target.value) }); }, style: UI.input, "data-testid": "editor-arrow-speed" }, ["0.8x", "1x", "2x", "3x", "4x"].map(function (n, i) { return __h("option", { key: n, value: i, style: { color: "#000" } }, n); })));
+        kids.push(__h("label", { key: "asov", style: UI.label }, __h("input", { type: "checkbox", checked: !!s.sov, onChange: function (e) { return p.updateSel({ sov: e.target.checked }); }, "data-testid": "editor-arrow-speed-override" }), T(" Override (blocca la velocità)", " Override (lock speed)")));
+        kids.push(__h("label", { key: "achg", style: UI.label }, __h("input", { type: "checkbox", checked: !!s.chg, onChange: function (e) { return p.updateSel({ chg: e.target.checked }); }, "data-testid": "editor-arrow-change-channel" }), T(" Change Channel", " Change Channel")));
+        kids.push(__h("label", { key: "atch", style: UI.label }, T("Target Channel", "Target Channel"), __h("input", { type: "number", min: 0, max: 9999, value: Number(s.tch) || 0, disabled: !s.chg, style: __assign(__assign({}, UI.input), { width: 90 }), onChange: function (e) { return p.updateSel({ tch: Math.max(0, Math.min(9999, Math.floor(Number(e.target.value) || 0))) }); }, "data-testid": "editor-arrow-target-channel" })));
+        kids.push(__h("label", { key: "acho", style: UI.label }, __h("input", { type: "checkbox", checked: !!s.chonly, onChange: function (e) { return p.updateSel({ chonly: e.target.checked }); }, "data-testid": "editor-arrow-channel-only" }), T(" Solo canale (non cambia movimento)", " Channel only (no movement change)")));
+        kids.push(__h("p", { key: "arh", style: __assign(__assign({}, UI.mono), { fontSize: 11, margin: 0 }) }, T("Canale del livello: ", "Level channel: ") + (Number(s.ach) || 0) + ". " + T("I trigger con CH diverso restano inattivi finché una freccia non cambia canale.", "Triggers with a different CH stay inactive until an arrow changes channel.")));
+        kids.push(__h("p", { key: "arl", style: { fontSize: 11, color: "rgba(255,255,255,.45)", margin: 0 } }, T("Gravità su/giù: il motore è un side-scroller, quindi la direzione resta orizzontale.", "Gravity is up/down: the engine is a side-scroller, so direction stays horizontal.")));
+    }
     if (TP[s.t])
         kids.push.apply(kids, __spreadArray([], __read(ParamEditor({ s: s, def: def, lang: lang, updateSel: p.updateSel })), false));
+    if (def.kind === "trigger")
+        kids.push(__h(TriggerOptions, { key: "topts", s: s, lang: lang, updateSel: p.updateSel, openSpecial: p.openSpecial }));
     if (TP[s.t] && TP[s.t].some(function (r) { return r[0] === "tg"; }))
         kids.push(__h("button", { key: "gotg", type: "button", style: UI.btn, onClick: function () { var _a; return p.selectGroup((_a = s.tg) !== null && _a !== void 0 ? _a : 1); }, "data-testid": "trg-select-group" }, T("Seleziona gli oggetti del gruppo ", "Select the group's objects ") + ((_k = s.tg) !== null && _k !== void 0 ? _k : 1)));
     kids.push(__h("div", { key: "act", style: UI.row }, __h("button", { type: "button", style: UI.btn, onClick: p.rotate, "data-testid": "editor-selected-rotate", title: T("Ruota di 90°", "Rotate 90°") }, "↻"), __h("button", { type: "button", style: UI.btn, onClick: p.duplicate, "data-testid": "editor-selected-duplicate", title: T("Duplica", "Duplicate") }, "⧉"), __h("button", { type: "button", style: UI.danger, onClick: p.removeSel, "data-testid": "editor-selected-delete", title: T("Elimina", "Delete") }, "🗑"), __h("button", { type: "button", style: p.multiMode ? UI.btnOn : UI.btn, onClick: function () { return p.setMultiMode(!p.multiMode); }, "data-testid": "editor-multi-toggle" }, T("Multi", "Multi")), __h("button", { type: "button", style: UI.btn, onClick: p.selectAll, "data-testid": "editor-select-all" }, T("Tutti", "All"))));
@@ -98949,7 +99539,7 @@ function BottomBar(p) {
     return __h("div", { className: "gde-bottom", "data-testid": "editor-bottom" }, __h("div", { className: "gde-tools" }, tb("build", __h(__GD61__1.Hammer, { className: "size-4" }), T("Costruisci", "Build")), tb("select", __h(__GD61__1.MousePointer2, { className: "size-4" }), T("Seleziona", "Select")), tb("edit", __h("span", { style: { width: 16, textAlign: "center" } }, "✥"), T("Modifica", "Edit")), tb("delete", __h(__GD61__1.Eraser, { className: "size-4" }), T("Cancella", "Erase")), __h("button", { type: "button", onClick: p.rotate, "data-testid": "editor-rotate-button", style: { display: "flex", alignItems: "center", gap: 8, borderRadius: 8, padding: "8px 12px", fontSize: 14, border: 0, cursor: "pointer", background: "rgba(0,0,0,.3)", color: "rgba(255,255,255,.8)", touchAction: "manipulation" } }, __h(__GD61__1.RotateCw, { className: "size-4" }), T("Ruota", "Rotate") + (tool === "build" ? " " + p.rot * 90 + "°" : ""))), __h(EditActions, p), __h("div", { style: { minWidth: 0 } }, main));
 }
 function EditActions(_a) {
-    var lang = _a.lang, redo = _a.redo, copySel = _a.copySel, pasteSel = _a.pasteSel, copyPaste = _a.copyPaste, deselect = _a.deselect, selected = _a.selected, hasClip = _a.hasClip, ui = _a.ui, setUi = _a.setUi, hsvSet = _a.hsvSet, hsvStart = _a.hsvStart;
+    var lang = _a.lang, redo = _a.redo, copySel = _a.copySel, pasteSel = _a.pasteSel, copyPaste = _a.copyPaste, deselect = _a.deselect, selected = _a.selected, hasClip = _a.hasClip, ui = _a.ui, setUi = _a.setUi, hsvSet = _a.hsvSet, hsvStart = _a.hsvStart, openSpecial = _a.openSpecial;
     var T = function (a, b) { return lang === "it" ? a : b; };
     var _b = __read(useState(null), 2), panel = _b[0], setPanel = _b[1];
     var tg = function (k) { return setUi(function (u) {
@@ -98964,6 +99554,7 @@ function EditActions(_a) {
         b(T("Copia", "Copy"), copySel, "copy", !selected),
         b(T("Incolla", "Paste"), pasteSel, "paste", !hasClip),
         b(T("Copia+Incolla", "Copy+Paste"), copyPaste, "copypaste", !selected),
+        b(T("Edit Special", "Edit Special"), openSpecial, "special", !(selected && selected.t === "trigger_spawn")),
         b(T("Deseleziona", "Deselect"), deselect, "deselect", !selected),
         b(T("Ripeti ↷", "Redo ↷"), redo, "redo"),
         tb("Swipe", "swipe", "swipe"),
@@ -99076,6 +99667,7 @@ function Editor() {
     var _m = __read(useState(null), 2), sel = _m[0], setSel = _m[1];
     var _o = __read(useState(36), 2), zoom = _o[0], setZoom = _o[1];
     var _p = __read(useState(false), 2), settingsOpen = _p[0], setSettingsOpen = _p[1];
+    var _sp2 = __read(useState(false), 2), specialOpen = _sp2[0], setSpecialOpen = _sp2[1];
     var _q = __read(useState(null), 2), test = _q[0], setTest = _q[1];
     var _r = __read(useState([]), 2), extra = _r[0], setExtra = _r[1];
     var _t = __read(useState(false), 2), multiMode = _t[0], setMultiMode = _t[1];
@@ -100495,7 +101087,8 @@ function Editor() {
                 lineNumber: 548,
                 columnNumber: 7
             }, this),
-            __h(BottomBar, { ui: ui, setUi: setUi, hsvSet: hsvSet, hsvStart: hsvStart, redo: redo, copySel: copySel, pasteSel: pasteSel, copyPaste: copyPaste, deselect: deselect, hasClip: clipN > 0, lang: lang, tool: tool, setTool: setTool, setSel: setSel, setExtra: setExtra, cat: cat, setCat: setCat, type: type, setType: setType, rot: rot, rotate: rotate, selected: selected, count: 1 + (extra ? extra.filter(function (k) { return k !== sel; }).length : 0), step: step, setStep: setStep, nudge: nudge, multiMode: multiMode, setMultiMode: setMultiMode, selectAll: selectAll, duplicate: duplicate, removeSel: removeSel, updateSel: updateSel, rotBy: rotBy, setAngleAbs: setAngleAbs, pushHist: pushHist, addGroup: addGroup, removeGroup: removeGroup, selectGroup: selectGroup, newGroupId: newGroupId }),
+            __h(BottomBar, { ui: ui, setUi: setUi, hsvSet: hsvSet, hsvStart: hsvStart, redo: redo, copySel: copySel, pasteSel: pasteSel, copyPaste: copyPaste, deselect: deselect, hasClip: clipN > 0, lang: lang, tool: tool, setTool: setTool, setSel: setSel, setExtra: setExtra, cat: cat, setCat: setCat, type: type, setType: setType, rot: rot, rotate: rotate, selected: selected, count: 1 + (extra ? extra.filter(function (k) { return k !== sel; }).length : 0), step: step, setStep: setStep, nudge: nudge, multiMode: multiMode, setMultiMode: setMultiMode, selectAll: selectAll, duplicate: duplicate, removeSel: removeSel, updateSel: updateSel, rotBy: rotBy, setAngleAbs: setAngleAbs, pushHist: pushHist, addGroup: addGroup, removeGroup: removeGroup, selectGroup: selectGroup, newGroupId: newGroupId, openSpecial: function () { setSpecialOpen(true); } }),
+            specialOpen && selected && selected.t === "trigger_spawn" ? __h(SpawnGroupDialog, { s: selected, lang: lang, updateSel: updateSel, selectGroup: selectGroup, onClose: function () { return setSpecialOpen(false); } }) : null,
             _jsxDEV(__GD44__1.Dialog, {
                 open: settingsOpen,
                 onOpenChange: setSettingsOpen,
