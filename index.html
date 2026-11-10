@@ -81419,6 +81419,41 @@ function gdShape(ctx, id, R, t, c, poly) {
         ctx.fill();
     }
 }
+var GD_SPRITES = typeof WeakMap !== "undefined" ? new WeakMap() : null;
+function spriteOf(ctx, o, def, u, W, H) {
+    if (!GD_SPRITES || W < 2 || H < 2 || W > 900 || H > 900)
+        return null;
+    var map = GD_SPRITES.get(ctx);
+    if (!map) {
+        map = new Map();
+        GD_SPRITES.set(ctx, map);
+    }
+    var key = def.kind + "|" + o.t + "|" + (o.color || "") + "|" + (o.color2 || "") + "|" + Math.round(W * 2) / 2 + "x" + Math.round(H * 2) / 2 + "|" + Math.round(u * 2) / 2;
+    var hit = map.get(key);
+    if (hit)
+        return hit;
+    var pad = Math.ceil(u * .45) + 4;
+    var sw = Math.ceil(W + pad * 2), sh = Math.ceil(H + pad * 2);
+    if (sw * sh > 700000)
+        return null;
+    var cnv = document.createElement("canvas");
+    cnv.width = sw;
+    cnv.height = sh;
+    var c2 = cnv.getContext("2d");
+    var base = {};
+    for (var k in o)
+        base[k] = o[k];
+    base.r = 0;
+    base.a = 0;
+    base.sc = 1;
+    delete base.sx;
+    delete base.sy;
+    drawObject(c2, base, pad, pad + H, u, { t: 0, beat: 0, noCache: true, alpha: 1 });
+    if (map.size > 350)
+        map.clear();
+    map.set(key, cnv);
+    return cnv;
+}
 function drawObject(ctx, o, px, py, u, opt) {
     var e_6, _a, e_7, _b, e_8, _c, e_9, _d, e_10, _e, e_11, _f, e_12, _g;
     var _h, _j, _k, _l, _m, _o, _p, _q, _r, _s;
@@ -81451,6 +81486,30 @@ function drawObject(ctx, o, px, py, u, opt) {
         ctx.fillRect(-chs / 2, -chh / 2, chs, chh);
         ctx.restore();
         return;
+    }
+    if (!opt.editor && !opt.noCache && (def.kind === "solid" || def.kind === "glass" || def.kind === "brick" || def.kind === "deco" || def.kind === "slope" || def.kind === "hazard")) {
+        var scW = Math.max(o.w || def.w, 1) * u, scH = Math.max(o.h || def.h, 1) * u;
+        var spr = spriteOf(ctx, o, def, u, scW, scH);
+        if (spr) {
+            ctx.save();
+            ctx.translate(px + scW / 2, py - scH / 2);
+            if (opt.rotx)
+                ctx.rotate(opt.rotx * Math.PI / 180);
+            if (opt.scale && opt.scale !== 1)
+                ctx.scale(opt.scale, opt.scale);
+            ctx.rotate((o.r || 0) * Math.PI / 2);
+            if (o.sc && o.sc !== 1)
+                ctx.scale(o.sc, o.sc);
+            if (o.sx || o.sy)
+                ctx.scale(o.sx || 1, o.sy || 1);
+            if (o.a)
+                ctx.rotate(o.a * Math.PI / 180);
+            if (opt.alpha !== undefined)
+                ctx.globalAlpha = opt.alpha;
+            ctx.drawImage(spr, -spr.width / 2, -spr.height / 2);
+            ctx.restore();
+            return;
+        }
     }
     var dw = o.w || def.w, dh = o.h || def.h;
     var W = Math.max(dw, 1) * u;
@@ -83058,6 +83117,42 @@ var Engine = (function () {
             finally { if (e_9) throw e_9.error; }
         }
         return out;
+    };
+    Engine.prototype.isSceneObj = function (o) {
+        if ((o.groups && o.groups.length) || o.broken)
+            return false;
+        var k = o.def.kind;
+        return k === "solid" || k === "slope" || k === "hazard" || k === "deco";
+    };
+    Engine.prototype.renderScene = function (ctx, camX, camY, u, W, H, vis) {
+        var viewW = W / u, viewH = H / u;
+        var c = this.sceneCache;
+        if (c && Math.abs(c.u - u) < .01 && Math.abs(c.viewW - viewW) < .01 && camX >= c.x0 && camX + viewW <= c.x1 && camY >= c.y0 && camY + viewH <= c.y1)
+            return c;
+        var x0 = camX - viewW * 1.5, x1 = camX + viewW * 2.5;
+        var y0 = camY - 4, y1 = camY + viewH + 4;
+        var cw = Math.ceil((x1 - x0) * u), ch = Math.ceil((y1 - y0) * u);
+        if (cw < 2 || ch < 2 || cw * ch > 20000000)
+            return null;
+        var cnv = document.createElement("canvas");
+        cnv.width = cw;
+        cnv.height = ch;
+        var c2 = cnv.getContext("2d");
+        var all = this.near(x0 - 2, x1 + 2);
+        for (var i = 0; i < all.length; i++) {
+            var o = all[i];
+            if (!this.isSceneObj(o))
+                continue;
+            (0, __GD53__1.drawObject)(c2, o.o, (o.o.x + o.dx - x0) * u, ch - (o.o.y + o.dy - y0) * u, u, {
+                t: 0,
+                beat: 0,
+                rotx: o.rot,
+                scale: o.sc
+            });
+        }
+        c = { cv: cnv, x0: x0, x1: x1, y0: y0, y1: y1, u: u, viewW: viewW, viewH: viewH };
+        this.sceneCache = c;
+        return c;
     };
     Engine.prototype.gst = function (g) {
         var s = this.gs.get(g);
@@ -84718,11 +84813,20 @@ var Engine = (function () {
         var vis = this.near(camX - 3, camX + viewW + 3);
         var rk = function (q) { return q.def.kind === "portal" ? 1 : q.def.kind === "decor" ? -1 : 0; };
         vis.sort(function (a, b) { return rk(a) - rk(b); });
+        var scene = null;
+        if (vis.length > 180 && Math.abs(this.zoom - this.zoomT) < .01)
+            scene = this.renderScene(ctx, camX, camY, u, W, H, vis);
+        if (scene)
+            ctx.drawImage(scene.cv, Math.round((scene.x0 - camX) * u), Math.round(H - (scene.y1 - camY) * u));
         var lowDetail = vis.length > 1200;
         try {
             for (var vis_1 = __values(vis), vis_1_1 = vis_1.next(); !vis_1_1.done; vis_1_1 = vis_1.next()) {
                 var o = vis_1_1.value;
                 if (o.broken)
+                    continue;
+                if (scene && this.isSceneObj(o))
+                    continue;
+                if (o.o.y > camY + H / u + 3 || o.o.y + Math.max(o.o.h || o.def.h, 1) < camY - 3)
                     continue;
                 var alpha = void 0;
                 if (o.o.t === "glass" || o.o.t === "spike_glass")
@@ -85189,6 +85293,7 @@ function GameCanvas(_a) {
         var last = performance.now();
         var raf = 0;
         var lastAttempt = 1;
+        var lastPc = -1;
         var loop = function (now) {
             var dt = (now - last) / 1e3;
             last = now;
@@ -85198,10 +85303,13 @@ function GameCanvas(_a) {
                 eng.update(dt);
             eng.render(ctx, cv.width, cv.height);
             var pc = eng.percent;
-            if (barRef.current)
-                barRef.current.style.width = "".concat(pc, "%");
-            if (pctRef.current)
-                pctRef.current.textContent = "".concat(pc, "%");
+            if (pc !== lastPc) {
+                lastPc = pc;
+                if (barRef.current)
+                    barRef.current.style.width = "".concat(pc, "%");
+                if (pctRef.current)
+                    pctRef.current.textContent = "".concat(pc, "%");
+            }
             if (eng.attempts !== lastAttempt) {
                 lastAttempt = eng.attempts;
                 setAttempt(eng.attempts);
