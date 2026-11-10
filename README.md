@@ -9,16 +9,22 @@ livelli online, classifiche, progressi e lobby multiplayer.
 | `server.js` | Server Node senza dipendenze: serve `index.html`, le API `/api/*`, le lobby e il ping `/ping` |
 | `package.json` | Script `start` (`node server.js`) |
 | `render.yaml` | Blueprint Render: web service Node, piano free, health check su `/ping` |
+| `online/adapter.js` | Adapter Cloudflare Worker: API online con archivio R2 persistente |
+| `online/build.js` | Genera `online/dist/worker.js` e il manifest di deploy dal core di `server.js` |
 
 ## Dove è pubblicato
 
 - **Gioco (pagina)**: <https://gattoita-lab.github.io/Geometry-dash-Web/> - GitHub Pages, branch `main`, root del repo.
-- **Server / API**: <https://geometry-dash-web-italia.onrender.com> - servizio Render creato dal Blueprint.
+- **Server / API**: <https://site-627b3cbd99aa4039876e170b0edf8f3f.freebuff.page> - Worker Cloudflare con archivio R2 persistente.
 
-`index.html` contiene la riga `window.GD_SERVER = "https://geometry-dash-web-italia.onrender.com"`:
-la pagina gira su GitHub Pages e le funzioni online (account, livelli online, lobby) chiamano le API su
-Render, che risponde con CORS aperto. Se togli quella riga il gioco gira solo in locale, senza account,
+`index.html` contiene la riga `window.GD_SERVER = "https://site-627b3cbd99aa4039876e170b0edf8f3f.freebuff.page"`:
+la pagina gira su GitHub Pages e le funzioni online (account, livelli online, lobby) chiamano le API del
+Worker, che risponde con CORS aperto. Se togli quella riga il gioco gira solo in locale, senza account,
 livelli online e lobby.
+
+Il Worker online si rigenera con `node online/build.js`; il manifest da pubblicare è
+`online/dist/manifest.json`. Account, livelli, progressi e Mi piace sono salvati nell'archivio R2 del sito,
+quindi sopravvivono ai riavvii. Le lobby restano temporanee, come nel server Node.
 
 ## In locale
 

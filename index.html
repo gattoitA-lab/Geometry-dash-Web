@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="it" class="dark">
 <head>
-<script>window.GD_SERVER = "https://geometry-dash-web-italia.onrender.com";</script>
+<script>window.GD_SERVER = "https://site-627b3cbd99aa4039876e170b0edf8f3f.freebuff.page";</script>
 <script>
 (function () {
   "use strict";
@@ -79283,18 +79283,20 @@ var AudioEngine = (function () {
         if (this.master)
             this.master.gain.value = m ? 0 : .35;
     };
-    AudioEngine.prototype.play = function (seed) {
+    AudioEngine.prototype.play = function (seed, at) {
         var _this = this;
         this.stop();
         var ctx = this.ensure();
+        var offset = Math.max(0, Number(at) || 0);
         if (typeof seed === "string") {
-            this.playTrack(ctx, seed.slice(2));
+            this.playTrack(ctx, seed.slice(2), offset);
             return;
         }
         this.song = this.genSong(seed);
-        this.step = 0;
+        var sixteenth = 60 / this.song.bpm / 4;
+        this.step = offset > 0 ? Math.floor(offset / sixteenth) : 0;
         this.nextTime = ctx.currentTime + .06;
-        this.startTime = this.nextTime;
+        this.startTime = this.nextTime - offset;
         this.timer = window.setInterval(function () { return _this.schedule(); }, 25);
     };
     AudioEngine.prototype.genSong = function (seed) {
@@ -79319,16 +79321,17 @@ var AudioEngine = (function () {
         if (this.musicGain && this.ctx)
             this.musicGain.gain.setTargetAtTime(Math.max(0, Math.min(1, v)), this.ctx.currentTime, .05);
     };
-    AudioEngine.prototype.playTrack = function (ctx, id) {
+    AudioEngine.prototype.playTrack = function (ctx, id, at) {
         var _this = this;
+        var offset = Math.max(0, Number(at) || 0);
         var tok = ++this.trackTok;
         this.song = { bpm: 120, root: 45, prog: [0, 0, 0, 0], lead: [], bassOct: [], wave: "square", user: true };
-        this.startTime = ctx.currentTime;
+        this.startTime = ctx.currentTime - offset;
         getUserBuffer(ctx, id).then(function (buf) {
             if (tok !== _this.trackTok)
                 return;
             if (!buf) {
-                _this.play(1);
+                _this.play(1, offset);
                 return;
             }
             var src = ctx.createBufferSource();
@@ -79336,14 +79339,15 @@ var AudioEngine = (function () {
             src.loop = true;
             src.connect(_this.musicGain);
             _this.trackSrc = src;
-            _this.startTime = ctx.currentTime;
+            _this.startTime = ctx.currentTime - offset;
+            var pos = buf.duration > 0 ? offset % buf.duration : 0;
             if (src.start)
-                src.start(0);
+                src.start(0, pos);
             else
                 src.noteOn(0);
         }).catch(function () {
             if (tok === _this.trackTok)
-                _this.play(1);
+                _this.play(1, offset);
         });
     };
     AudioEngine.prototype.stop = function () {
@@ -79362,6 +79366,11 @@ var AudioEngine = (function () {
             window.clearInterval(this.timer);
         this.timer = null;
         this.song = null;
+    };
+    AudioEngine.prototype.position = function () {
+        if (!this.ctx || !this.song)
+            return 0;
+        return Math.max(0, this.ctx.currentTime - this.startTime);
     };
     AudioEngine.prototype.beat = function () {
         if (!this.ctx || !this.song)
@@ -82982,6 +82991,7 @@ var Engine = (function () {
         this.dyn = [];
         this.shakeAmp = 4;
         this.song = null;
+        this.songStartTime = 0;
         this.coinCount = 0;
         this.data = data;
         this.opts = opts;
@@ -83270,6 +83280,7 @@ var Engine = (function () {
             this.attempts++;
         this.jumps = first ? 0 : this.jumps;
         this.song = this.opts.song;
+        this.songStartTime = 0;
         this.shake = 0;
         this.gs = new Map();
         this.anims = [];
@@ -83289,7 +83300,7 @@ var Engine = (function () {
         this.pulseT = 0;
         this.applyGroups();
         __GD47__1.audio.setMusicVol(1);
-        __GD47__1.audio.play(this.song);
+        __GD47__1.audio.play(this.song, 0);
         if (this.practice && this.startPos && !first)
             this.restore(this.startPos, true);
     };
@@ -83356,7 +83367,9 @@ var Engine = (function () {
             bg: this.bgTarget,
             ground: this.groundTarget,
             camY: this.camY,
+            time: this.time,
             song: this.song,
+            songAt: Math.max(0, this.time - (this.songStartTime || 0)),
             fx: __assign({}, this.fx),
             gs: __spreadArray([], __read(this.gs), false).map(function (_a) {
                 var _b = __read(_a, 2), k = _b[0], v = _b[1];
@@ -83409,6 +83422,7 @@ var Engine = (function () {
         this.noBg = !!s.noBg;
         this.ground = this.groundTarget = s.ground;
         this.camY = s.camY;
+        this.time = typeof s.time === "number" ? s.time : this.time;
         this.fx = __assign({}, (s.fx || {}));
         this.gs = new Map((s.gs || []).map(function (_a) {
             var _b = __read(_a, 2), k = _b[0], v = _b[1];
@@ -83423,11 +83437,13 @@ var Engine = (function () {
         this.applyGroups();
         {
             var sg = s.song === undefined ? this.opts.song : s.song;
+            var songAt = Math.max(0, Number(s.songAt) || 0);
             this.song = sg;
+            this.songStartTime = Math.max(0, this.time - songAt);
             if (sg == null)
                 __GD47__1.audio.stop();
             else
-                __GD47__1.audio.play(sg);
+                __GD47__1.audio.play(sg, songAt);
         }
         this.trails = [[], []];
         this.state = "playing";
@@ -83835,10 +83851,12 @@ var Engine = (function () {
                                 break;
                             case "trigger_music":
                                 _this.song = to.song || 1;
-                                __GD47__1.audio.play(_this.song);
+                                _this.songStartTime = _this.time;
+                                __GD47__1.audio.play(_this.song, 0);
                                 break;
                             case "trigger_music_stop":
                                 _this.song = null;
+                                _this.songStartTime = _this.time;
                                 __GD47__1.audio.stop();
                                 break;
                             case "trigger_volume":
@@ -84101,12 +84119,17 @@ var Engine = (function () {
                 }
                 break;
             case "portal_tp_in": {
-                var best = null;
+                var best = null, bestD = Infinity, cx = o.x + o.w / 2, cy = o.y + o.h / 2;
                 try {
-                    for (var _c = __values(this.near(o.x - 4, o.x + 4)), _d = _c.next(); !_d.done; _d = _c.next()) {
+                    for (var _c = __values(this.objs), _d = _c.next(); !_d.done; _d = _c.next()) {
                         var q = _d.value;
-                        if (q.o.t === "portal_tp_out" && (!best || Math.abs(q.x - o.x) < Math.abs(best.x - o.x)))
+                        if (q.o.t !== "portal_tp_out")
+                            continue;
+                        var d = Math.hypot(q.x + q.w / 2 - cx, q.y + q.h / 2 - cy);
+                        if (d < bestD) {
                             best = q;
+                            bestD = d;
+                        }
                     }
                 }
                 catch (e_21_1) { e_21 = { error: e_21_1 }; }
@@ -84117,8 +84140,10 @@ var Engine = (function () {
                     finally { if (e_21) throw e_21.error; }
                 }
                 if (best) {
-                    p.y = best.y + 1;
-                    this.burst(p.x + .5, p.y + .5, "#ff7700", 12);
+                    p.x = best.x + (best.w - s) / 2;
+                    p.y = best.y + (best.h - s) / 2;
+                    p.onGround = false;
+                    this.burst(p.x + s / 2, p.y + s / 2, "#ff7700", 12);
                 }
                 break;
             }
