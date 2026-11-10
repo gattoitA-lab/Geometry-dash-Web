@@ -81323,11 +81323,37 @@ function hsvHex(hex, hsv) {
     var x = function (q) { return ("0" + Math.round(q * 255).toString(16)).slice(-2); };
     return "#" + x(f(5)) + x(f(3)) + x(f(1));
 }
+function rrect(ctx, x, y, w, h, r) {
+    var rr = Math.max(0, Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2));
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.lineTo(x + w - rr, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+    ctx.lineTo(x + w, y + h - rr);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+    ctx.lineTo(x + rr, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+    ctx.lineTo(x, y + rr);
+    ctx.quadraticCurveTo(x, y, x + rr, y);
+    ctx.closePath();
+}
 function gdShape(ctx, id, R, t, c, poly) {
-    var k = id % 9, tr = function (a) { return a; };
-    ctx.fillStyle = c + "55";
-    if (k === 0)
-        poly([[-R * .8, -R * .8], [R * .8, -R * .8], [R * .8, R * .8], [-R * .8, R * .8]]);
+    var k = id % 9;
+    var g = ctx.createLinearGradient(0, -R, 0, R);
+    g.addColorStop(0, shade(c, 1.35));
+    g.addColorStop(.55, c);
+    g.addColorStop(1, shade(c, .5));
+    ctx.fillStyle = g;
+    ctx.strokeStyle = "rgba(255,255,255,.95)";
+    ctx.lineWidth = Math.max(1, R * .1);
+    ctx.lineJoin = "round";
+    ctx.shadowColor = c;
+    ctx.shadowBlur = R * .4;
+    if (k === 0) {
+        rrect(ctx, -R * .78, -R * .78, R * 1.56, R * 1.56, R * .18);
+        ctx.fill();
+        ctx.stroke();
+    }
     else if (k === 1) {
         ctx.beginPath();
         ctx.arc(0, 0, R * .75, 0, Math.PI * 2);
@@ -81363,6 +81389,8 @@ function gdShape(ctx, id, R, t, c, poly) {
     else if (k === 6)
         poly([[0, -R * .9], [R * .9, 0], [0, R * .9], [-R * .9, 0]]);
     else if (k === 7) {
+        ctx.strokeStyle = shade(c, 1.15);
+        ctx.lineWidth = Math.max(2, R * .16);
         ctx.beginPath();
         ctx.moveTo(-R * .9, 0);
         ctx.lineTo(R * .9, 0);
@@ -81379,6 +81407,16 @@ function gdShape(ctx, id, R, t, c, poly) {
             p.push([Math.cos(a) * r2, Math.sin(a) * r2]);
         }
         poly(p);
+    }
+    ctx.shadowBlur = 0;
+    if (k === 0 || k === 1 || k === 2 || k === 3 || k === 6 || k === 8) {
+        var hl = ctx.createLinearGradient(0, -R * .9, 0, R * .1);
+        hl.addColorStop(0, "rgba(255,255,255,.5)");
+        hl.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = hl;
+        ctx.beginPath();
+        ctx.ellipse(-R * .12, -R * .42, R * .46, R * .26, 0, 0, Math.PI * 2);
+        ctx.fill();
     }
 }
 function drawObject(ctx, o, px, py, u, opt) {
@@ -81444,96 +81482,179 @@ function drawObject(ctx, o, px, py, u, opt) {
         case "deco":
         case "brick": {
             var tc = o.color || (def.tint ? def.color : null);
-            if (tc)
-                ctx.fillStyle = tc + "55";
-            else if (def.kind === "glass")
-                ctx.fillStyle = "rgba(160,232,255,0.18)";
-            else if (def.kind === "deco")
-                ctx.fillStyle = "rgba(0,0,0,0.55)";
+            var isDeco = def.kind === "deco", isGlass = def.kind === "glass", isBrick = def.kind === "brick";
+            var base = tc || (isBrick ? "#e9b48a" : isGlass ? "#9fe8ff" : "#5b8cff");
+            var rad = Math.min(u * .09, w * .16, h * .16);
+            if (isDeco) {
+                ctx.save();
+                ctx.globalAlpha *= .7;
+                ctx.fillStyle = tc ? tc + "3a" : "rgba(0,0,0,0.5)";
+                rrect(ctx, L, B - h, w, h, rad);
+                ctx.fill();
+                ctx.strokeStyle = tc || "rgba(255,255,255,.55)";
+                ctx.lineWidth = lw * .8;
+                ctx.stroke();
+                ctx.restore();
+                break;
+            }
+            var gr = ctx.createLinearGradient(0, B - h, 0, B);
+            if (isGlass) {
+                gr.addColorStop(0, "rgba(225,250,255,.55)");
+                gr.addColorStop(.5, "rgba(120,220,255,.26)");
+                gr.addColorStop(1, "rgba(50,140,215,.4)");
+            }
             else {
-                var gr = ctx.createLinearGradient(0, B - h, 0, B);
-                gr.addColorStop(0, "rgba(90,150,255,0.30)");
-                gr.addColorStop(.45, "rgba(8,14,40,0.62)");
-                gr.addColorStop(1, "rgba(0,0,12,0.82)");
-                ctx.fillStyle = gr;
+                gr.addColorStop(0, shade(base, 1.4));
+                gr.addColorStop(.16, shade(base, 1.08));
+                gr.addColorStop(.72, shade(base, .62));
+                gr.addColorStop(1, shade(base, .42));
             }
-            ctx.fillRect(L, B - h, w, h);
-            if (def.kind !== "deco") {
-                ctx.shadowColor = tc || (def.kind === "brick" ? "#e9b48a" : def.kind === "glass" ? "#9fe8ff" : "rgba(130,190,255,0.9)");
-                ctx.shadowBlur = u * .2;
+            ctx.fillStyle = gr;
+            rrect(ctx, L, B - h, w, h, rad);
+            ctx.fill();
+            ctx.save();
+            rrect(ctx, L, B - h, w, h, rad);
+            ctx.clip();
+            var hg = ctx.createLinearGradient(0, B - h, 0, B - h + h * .5);
+            hg.addColorStop(0, "rgba(255,255,255,.45)");
+            hg.addColorStop(1, "rgba(255,255,255,0)");
+            ctx.fillStyle = hg;
+            ctx.fillRect(L, B - h, w, h * .5);
+            if (isGlass) {
+                ctx.strokeStyle = "rgba(255,255,255,.45)";
+                ctx.lineWidth = u * .08;
+                ctx.beginPath();
+                ctx.moveTo(L - u * .2, B - h * .12);
+                ctx.lineTo(L + w * .38, B - h - u * .1);
+                ctx.moveTo(L + w * .45, B + u * .1);
+                ctx.lineTo(L + w + u * .2, B - h * .55);
+                ctx.stroke();
             }
-            ctx.strokeStyle = tc ? tc : def.kind === "brick" ? "#e9b48a" : def.kind === "glass" ? "#9fe8ff" : "rgba(255,255,255,0.92)";
-            ctx.lineWidth = lw;
-            if (def.kind === "brick")
-                ctx.setLineDash([u * .15, u * .1]);
-            if (def.kind === "deco")
-                ctx.globalAlpha *= .55;
-            ctx.strokeRect(L + lw / 2, B - h + lw / 2, w - lw, h - lw);
+            if (isBrick) {
+                ctx.strokeStyle = "rgba(90,44,22,.35)";
+                ctx.lineWidth = lw * .7;
+                var rows = Math.max(1, Math.round(dh * 2));
+                for (var bi = 1; bi < rows; bi++) {
+                    var by = B - h + bi * h / rows;
+                    ctx.beginPath();
+                    ctx.moveTo(L, by);
+                    ctx.lineTo(L + w, by);
+                    ctx.stroke();
+                    var off = bi % 2 ? 0 : w / 4;
+                    for (var bx = off; bx < w; bx += w / 2) {
+                        if (bx < u * .05)
+                            continue;
+                        ctx.beginPath();
+                        ctx.moveTo(L + bx, by - h / rows);
+                        ctx.lineTo(L + bx, by);
+                        ctx.stroke();
+                    }
+                }
+            }
+            ctx.restore();
+            ctx.shadowColor = tc || (isGlass ? "#9fe8ff" : "rgba(130,190,255,.9)");
+            ctx.shadowBlur = u * .18;
+            ctx.strokeStyle = tc ? shade(tc, 1.25) : isGlass ? "#d9f8ff" : "#eaf3ff";
+            ctx.lineWidth = lw * 1.05;
+            rrect(ctx, L + lw * .5, B - h + lw * .5, w - lw, h - lw, Math.max(0, rad - lw * .5));
+            ctx.stroke();
             ctx.shadowBlur = 0;
-            ctx.setLineDash([]);
-            if (def.kind === "solid" && !tc) {
-                ctx.fillStyle = "rgba(255,255,255,0.16)";
-                ctx.fillRect(L + lw, B - h + lw, w - lw * 2, Math.min(u * .1, h * .25));
+            if (!isGlass) {
+                ctx.strokeStyle = "rgba(255,255,255,.22)";
+                ctx.lineWidth = lw * .55;
+                rrect(ctx, L + u * .2, B - h + u * .2, Math.max(0, w - u * .4), Math.max(0, h - u * .4), Math.max(0, rad * .5));
+                ctx.stroke();
             }
-            ctx.strokeStyle = "rgba(255,255,255,0.18)";
-            ctx.strokeRect(L + u * .22, B - h + Math.min(u * .22, h * .3), w - u * .44, Math.max(0, h - Math.min(u * .44, h * .6)));
-            if (def.kind !== "deco" && (dw > 1 || dh > 1)) {
-                ctx.strokeStyle = "rgba(255,255,255,0.12)";
-                ctx.lineWidth = lw * .6;
+            if (dw > 1 || dh > 1) {
+                ctx.strokeStyle = "rgba(0,0,0,.28)";
+                ctx.lineWidth = lw * .7;
                 ctx.beginPath();
                 for (var gi = 1; gi < dw - 1e-6; gi++) {
-                    ctx.moveTo(L + gi * u, B - h);
-                    ctx.lineTo(L + gi * u, B);
+                    ctx.moveTo(L + gi * u, B - h + u * .08);
+                    ctx.lineTo(L + gi * u, B - u * .08);
                 }
                 for (var gj = 1; gj < dh - 1e-6; gj++) {
-                    ctx.moveTo(L, B - gj * u);
-                    ctx.lineTo(L + w, B - gj * u);
+                    ctx.moveTo(L + u * .08, B - gj * u);
+                    ctx.lineTo(L + w - u * .08, B - gj * u);
                 }
                 ctx.stroke();
             }
             break;
         }
         case "slope": {
+            var slc = o.color && o.color.toLowerCase() !== "#ffffff" ? o.color : "#5b8cff";
             ctx.beginPath();
             ctx.moveTo(L, B);
             ctx.lineTo(L + w, B - h);
             ctx.lineTo(L + w, B);
             ctx.closePath();
-            ctx.fillStyle = "rgba(0,0,0,0.55)";
+            var sg0 = ctx.createLinearGradient(0, B - h, 0, B);
+            sg0.addColorStop(0, shade(slc, 1.25));
+            sg0.addColorStop(1, shade(slc, .45));
+            ctx.fillStyle = sg0;
             ctx.fill();
-            ctx.strokeStyle = "rgba(255,255,255,0.92)";
-            ctx.lineWidth = lw;
+            ctx.shadowColor = slc;
+            ctx.shadowBlur = u * .18;
+            ctx.strokeStyle = "#eaf3ff";
+            ctx.lineWidth = lw * 1.1;
+            ctx.lineJoin = "round";
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = "rgba(255,255,255,.5)";
+            ctx.lineWidth = lw * .6;
+            ctx.beginPath();
+            ctx.moveTo(L + u * .14, B - u * .12);
+            ctx.lineTo(L + w - u * .14, B - h + u * .12);
             ctx.stroke();
             break;
         }
         case "hazard": {
+            ctx.lineJoin = "round";
             if (o.t === "thorns") {
-                ctx.fillStyle = "#000";
-                ctx.strokeStyle = "rgba(255,255,255,0.7)";
-                ctx.lineWidth = lw * .7;
-                for (var i = 0; i < 3; i++) {
-                    tri(ctx, L + i * w / 3, B, w / 3, h);
+                ctx.strokeStyle = "rgba(255,255,255,0.85)";
+                ctx.lineWidth = lw * .8;
+                for (var i = 0; i < 4; i++) {
+                    var tw = w / 4;
+                    var tg = ctx.createLinearGradient(0, B - h, 0, B);
+                    tg.addColorStop(0, "#ff2450");
+                    tg.addColorStop(.45, "#1c0208");
+                    tg.addColorStop(1, "#000");
+                    ctx.fillStyle = tg;
+                    tri(ctx, L + i * tw, B, tw * .96, h * (i % 2 ? .68 : 1));
                     ctx.fill();
                     ctx.stroke();
                 }
             }
             else {
-                tri(ctx, L + (W - w * (o.t === "spike_small" ? .66 : 1)) / 2, B, w * (o.t === "spike_small" ? .66 : 1), h);
-                if (o.t === "spike_glass")
-                    ctx.fillStyle = "rgba(160,232,255,0.15)";
+                var sk = o.t === "spike_small" ? .66 : 1;
+                tri(ctx, L + (W - w * sk) / 2, B, w * sk, h);
+                if (o.t === "spike_glass") {
+                    ctx.fillStyle = "rgba(160,232,255,0.12)";
+                    ctx.setLineDash([u * .12, u * .08]);
+                }
                 else {
                     var sg = ctx.createLinearGradient(0, B - h, 0, B);
-                    sg.addColorStop(0, "#3a0414");
+                    sg.addColorStop(0, "#ff5d7a");
+                    sg.addColorStop(.35, "#4a0618");
                     sg.addColorStop(1, "#000");
                     ctx.fillStyle = sg;
                     ctx.shadowColor = "#ff2d55";
-                    ctx.shadowBlur = u * .28;
+                    ctx.shadowBlur = u * .3;
                 }
                 ctx.fill();
-                ctx.strokeStyle = o.t === "spike_glass" ? "#9fe8ff" : (o.color || "#fff");
-                ctx.lineWidth = lw;
-                ctx.stroke();
                 ctx.shadowBlur = 0;
+                ctx.strokeStyle = o.t === "spike_glass" ? "#9fe8ff" : (o.color && o.color !== "#ffffff" ? o.color : "rgba(255,255,255,.95)");
+                ctx.lineWidth = lw * 1.1;
+                ctx.stroke();
+                ctx.setLineDash([]);
+                if (o.t !== "spike_glass" && h > u * .6) {
+                    ctx.strokeStyle = "rgba(255,255,255,.35)";
+                    ctx.lineWidth = lw * .6;
+                    ctx.beginPath();
+                    ctx.moveTo(L + (W - w * sk) / 2 + w * sk * .5, B - h + u * .12);
+                    ctx.lineTo(L + (W - w * sk) / 2 + w * sk * .12, B - u * .05);
+                    ctx.stroke();
+                }
             }
             break;
         }
@@ -81549,72 +81670,129 @@ function drawObject(ctx, o, px, py, u, opt) {
             }
             else if (o.t === "monster_biter" || o.t === "monster_urchin")
                 monster(ctx, o.t === "monster_biter" ? "biter" : "urchin", r, opt.t, o.color || def.color, W, H);
-            else
+            else {
                 saw(ctx, r, opt.t, o.t === "saw_small" ? 8 : 12, "#000", "#fff");
+                ctx.beginPath();
+                ctx.arc(0, 0, r * .26, 0, Math.PI * 2);
+                ctx.fillStyle = "#16202f";
+                ctx.fill();
+                ctx.strokeStyle = "#dfe9ff";
+                ctx.lineWidth = lw * .8;
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(-r * .07, -r * .07, r * .08, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(255,255,255,.55)";
+                ctx.fill();
+            }
             break;
         }
         case "pad": {
+            var pc = def.color;
+            var pw = W * .92, ph = Math.max(u * .16, h * .6);
+            ctx.fillStyle = "rgba(3,7,20,.78)";
+            rrect(ctx, -pw / 2, B - ph, pw, ph, u * .08);
+            ctx.fill();
+            ctx.strokeStyle = "rgba(255,255,255,.5)";
+            ctx.lineWidth = lw * .55;
+            ctx.stroke();
+            var pg = ctx.createLinearGradient(0, B - h * (1 + pulse * .25), 0, B);
+            pg.addColorStop(0, "#ffffff");
+            pg.addColorStop(.3, pc);
+            pg.addColorStop(1, shade(pc, .55));
+            ctx.shadowColor = pc;
+            ctx.shadowBlur = u * (.45 + pulse * .3);
             ctx.beginPath();
-            ctx.ellipse(0, B, W * .45, h * (1 + pulse * .2), 0, Math.PI, 0);
-            ctx.fillStyle = def.color;
-            ctx.shadowColor = def.color;
-            ctx.shadowBlur = u * .5;
+            ctx.ellipse(0, B - ph * .35, pw * .46, h * .62 * (1 + pulse * .18), 0, Math.PI, 0);
+            ctx.fillStyle = pg;
             ctx.fill();
             ctx.shadowBlur = 0;
-            ctx.strokeStyle = "#fff";
-            ctx.lineWidth = lw * .6;
+            ctx.strokeStyle = "rgba(255,255,255,.95)";
+            ctx.lineWidth = lw * .8;
             ctx.stroke();
+            ctx.strokeStyle = "rgba(255,255,255,.9)";
+            ctx.lineWidth = lw * .7;
+            ctx.lineCap = "round";
+            for (var pi = 0; pi < 2; pi++) {
+                var py2 = B - ph - u * .16 - pi * u * .15;
+                ctx.beginPath();
+                ctx.moveTo(-u * .15, py2 + u * .1);
+                ctx.lineTo(0, py2);
+                ctx.lineTo(u * .15, py2 + u * .1);
+                ctx.stroke();
+            }
             break;
         }
         case "orb": {
             var r = W * (.36 + pulse * .05);
-            ctx.shadowColor = def.color;
-            ctx.shadowBlur = u * .6;
+            var oc = def.color;
+            ctx.shadowColor = oc;
+            ctx.shadowBlur = u * .7;
+            var og = ctx.createRadialGradient(-r * .3, -r * .35, r * .08, 0, 0, r);
+            og.addColorStop(0, shade(oc, 1.6));
+            og.addColorStop(.55, oc);
+            og.addColorStop(1, shade(oc, .55));
             ctx.beginPath();
             ctx.arc(0, 0, r, 0, Math.PI * 2);
-            ctx.fillStyle = def.color;
+            ctx.fillStyle = og;
             ctx.fill();
             ctx.shadowBlur = 0;
-            ctx.lineWidth = lw * 1.4;
-            ctx.strokeStyle = o.t === "orb_black" ? "#ff4466" : "#fff";
+            ctx.lineWidth = lw * 1.5;
+            ctx.strokeStyle = "rgba(255,255,255,.95)";
             ctx.stroke();
             ctx.beginPath();
-            ctx.arc(0, 0, r * 1.35 + Math.sin(opt.t * 6) * u * .03, 0, Math.PI * 2);
-            ctx.strokeStyle = def.color;
+            ctx.arc(0, 0, r * .72, 0, Math.PI * 2);
+            ctx.strokeStyle = "rgba(0,0,0,.25)";
             ctx.lineWidth = lw * .8;
             ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(0, 0, r * 1.38 + Math.sin(opt.t * 6) * u * .03, 0, Math.PI * 2);
+            ctx.strokeStyle = oc;
+            ctx.lineWidth = lw * .9;
+            ctx.stroke();
             if (o.t.startsWith("orb_dash")) {
-                ctx.fillStyle = "#000";
+                ctx.fillStyle = "#0a0f1a";
                 ctx.beginPath();
                 ctx.moveTo(r * .55, 0);
-                ctx.lineTo(-r * .35, -r * .45);
-                ctx.lineTo(-r * .35, r * .45);
+                ctx.lineTo(-r * .35, -r * .5);
+                ctx.lineTo(-r * .35, r * .5);
                 ctx.fill();
             }
             if (o.t === "orb_spider") {
-                ctx.fillStyle = "#000";
+                ctx.fillStyle = "#0a0f1a";
                 ctx.beginPath();
-                ctx.moveTo(0, -r * .6);
-                ctx.lineTo(r * .45, r * .3);
-                ctx.lineTo(-r * .45, r * .3);
+                ctx.moveTo(0, -r * .62);
+                ctx.lineTo(r * .5, r * .34);
+                ctx.lineTo(-r * .5, r * .34);
                 ctx.fill();
             }
             break;
         }
         case "portal": {
-            ctx.shadowColor = def.color;
-            ctx.shadowBlur = u * .8;
+            var qc = def.color;
+            ctx.shadowColor = qc;
+            ctx.shadowBlur = u * .9;
             ctx.beginPath();
-            ctx.ellipse(0, 0, W * .38, H * .48, 0, 0, Math.PI * 2);
-            ctx.strokeStyle = def.color;
-            ctx.lineWidth = u * .22;
+            ctx.ellipse(0, 0, W * .42, H * .5, 0, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(4,8,22,.78)";
+            ctx.fill();
+            var qg = ctx.createLinearGradient(0, -H * .5, 0, H * .5);
+            qg.addColorStop(0, shade(qc, 1.4));
+            qg.addColorStop(.5, qc);
+            qg.addColorStop(1, shade(qc, .6));
+            ctx.strokeStyle = qg;
+            ctx.lineWidth = u * .26;
             ctx.stroke();
             ctx.shadowBlur = 0;
-            ctx.lineWidth = lw * .6;
-            ctx.strokeStyle = "#fff";
+            ctx.strokeStyle = "rgba(255,255,255,.9)";
+            ctx.lineWidth = lw * .55;
             ctx.stroke();
-            ctx.fillStyle = "rgba(255,255,255,0.12)";
-            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(0, 0, W * .3, H * .38, 0, 0, Math.PI * 2);
+            ctx.strokeStyle = qc;
+            ctx.globalAlpha *= .55;
+            ctx.lineWidth = lw * .9;
+            ctx.stroke();
+            ctx.globalAlpha /= .55;
             var lbl = {
                 portal_cube: "■",
                 portal_ship: "▶",
@@ -81638,9 +81816,12 @@ function drawObject(ctx, o, px, py, u, opt) {
             };
             ctx.rotate(-((o.r || 0) * Math.PI) / 2);
             ctx.fillStyle = "#fff";
-            ctx.font = "700 ".concat(u * .6, "px \"Space Grotesk Variable\", sans-serif");
+            ctx.strokeStyle = "rgba(0,0,0,.55)";
+            ctx.lineWidth = Math.max(2, u * .06);
+            ctx.font = "700 ".concat(u * .72, "px \"Space Grotesk Variable\", sans-serif");
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
+            ctx.strokeText((_j = lbl[o.t]) !== null && _j !== void 0 ? _j : "?", 0, 0);
             ctx.fillText((_j = lbl[o.t]) !== null && _j !== void 0 ? _j : "?", 0, 0);
             break;
         }
@@ -81666,16 +81847,32 @@ function drawObject(ctx, o, px, py, u, opt) {
         }
         case "coin": {
             var r = W * .38;
+            var crx = r * Math.abs(Math.cos(opt.t * 2)) + r * .15;
             ctx.shadowColor = "#ffd700";
             ctx.shadowBlur = u * .6;
+            var cg = ctx.createLinearGradient(-crx, -r, crx, r);
+            cg.addColorStop(0, "#fff6b0");
+            cg.addColorStop(.45, "#ffd700");
+            cg.addColorStop(1, "#b8860b");
             ctx.beginPath();
-            ctx.ellipse(0, 0, r * Math.abs(Math.cos(opt.t * 2)) + r * .15, r, 0, 0, Math.PI * 2);
-            ctx.fillStyle = "#ffd700";
+            ctx.ellipse(0, 0, crx, r, 0, 0, Math.PI * 2);
+            ctx.fillStyle = cg;
             ctx.fill();
             ctx.shadowBlur = 0;
             ctx.strokeStyle = "#a07800";
             ctx.lineWidth = lw;
             ctx.stroke();
+            ctx.beginPath();
+            ctx.ellipse(0, 0, crx * .58, r * .58, 0, 0, Math.PI * 2);
+            ctx.strokeStyle = "rgba(255,255,255,.6)";
+            ctx.lineWidth = lw * .7;
+            ctx.stroke();
+            if (crx > r * .5) {
+                ctx.beginPath();
+                ctx.arc(-crx * .3, -r * .3, Math.max(1, r * .12), 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(255,255,255,.75)";
+                ctx.fill();
+            }
             break;
         }
         case "text": {
@@ -81692,17 +81889,27 @@ function drawObject(ctx, o, px, py, u, opt) {
         case "trigger": {
             var lab = { startpos: "SP", trigger_color: "COL", trigger_ground: "GND", trigger_music: "♪", trigger_music_stop: "■♪", trigger_volume: "VOL", trigger_sfx: "SFX", trigger_flash: "FLS", trigger_shake: "SHK", trigger_speed: "SPD", trigger_move: "MOV", trigger_rotate: "ROT", trigger_scale: "SCL", trigger_alpha: "ALP", trigger_toggle: "TOG", trigger_stop: "STP", trigger_pulse: "PLS", trigger_shader: "SHD", trigger_zoom: "ZOM", trigger_timewarp: "TWP", trigger_spawn: "SPN", collision_block: "CBK", trigger_collision: "COL", trigger_gradient: "GRD", trigger_keyframe: "KEY", trigger_follow: "FOL", trigger_touch: "TCH", trigger_gravity: "GRV", trigger_camoff: "COF", trigger_camrot: "CRT", trigger_camstatic: "CST", trigger_pickup: "PCK", trigger_count: "CNT", trigger_icount: "ICT" }[o.t] || "TRG";
             var fc = (o.t === "trigger_color" || o.t === "trigger_ground" || o.t === "trigger_pulse") ? (o.color || def.color) : def.color;
+            var trg = ctx.createRadialGradient(-W * .1, -W * .1, W * .05, 0, 0, W * .42);
+            trg.addColorStop(0, shade(fc, 1.5));
+            trg.addColorStop(.7, fc);
+            trg.addColorStop(1, shade(fc, .55));
+            ctx.shadowColor = fc;
+            ctx.shadowBlur = u * .3;
             ctx.beginPath();
-            ctx.arc(0, 0, W * .35, 0, Math.PI * 2);
-            ctx.fillStyle = fc;
+            ctx.arc(0, 0, W * .38, 0, Math.PI * 2);
+            ctx.fillStyle = trg;
             ctx.fill();
-            ctx.strokeStyle = "#fff";
-            ctx.lineWidth = lw;
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = "rgba(255,255,255,.95)";
+            ctx.lineWidth = lw * 1.2;
             ctx.stroke();
-            ctx.fillStyle = "#000";
-            ctx.font = "700 ".concat(u * .3, "px sans-serif");
+            ctx.fillStyle = "#fff";
+            ctx.strokeStyle = "rgba(0,0,0,.6)";
+            ctx.lineWidth = Math.max(2, u * .05);
+            ctx.font = "700 ".concat(u * .32, "px sans-serif");
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
+            ctx.strokeText(lab, 0, 0);
             ctx.fillText(lab, 0, 0);
             var sub = o.t === "trigger_music" ? typeof o.song === "string" ? "\u266a" : "#" + (o.song || 1) : o.t === "trigger_volume" ? ((_k = o.v) !== null && _k !== void 0 ? _k : 50) + "%" : o.t === "trigger_shake" ? "x" + ((_l = o.v) !== null && _l !== void 0 ? _l : 4) : o.t === "trigger_speed" ? ["0.8x", "1x", "2x", "3x", "4x"][(_m = o.v) !== null && _m !== void 0 ? _m : 1] : o.t === "trigger_sfx" ? String(o.sfx || "laser") : o.t === "collision_block" ? "#" + ((_o = o.cid) !== null && _o !== void 0 ? _o : 1) : o.t === "trigger_collision" ? ((_p = o.a) !== null && _p !== void 0 ? _p : 0) + ">" + ((_q = o.b) !== null && _q !== void 0 ? _q : 1) : o.t === "trigger_shader" ? String(o.fx || "") : o.t === "trigger_zoom" ? ((_r = o.v) !== null && _r !== void 0 ? _r : 150) + "%" : o.t === "trigger_timewarp" ? ((_s = o.v) !== null && _s !== void 0 ? _s : 50) + "%" : (o.tg != null ? "G" + o.tg : "");
             if (sub) {
@@ -81741,6 +81948,21 @@ function drawObject(ctx, o, px, py, u, opt) {
             };
             if (o.t.indexOf("gd_") === 0) {
                 gdShape(ctx, parseInt(o.t.slice(3), 10), R, tt, c, poly);
+                if (opt.editor) {
+                    var gid = o.t.slice(3);
+                    ctx.save();
+                    ctx.shadowBlur = 0;
+                    ctx.font = "700 " + Math.max(8, u * .24) + "px sans-serif";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    var bw = ctx.measureText(gid).width + u * .14;
+                    ctx.fillStyle = "rgba(0,0,0,.7)";
+                    rrect(ctx, R * .5 - bw / 2, R * .62, bw, u * .28, u * .07);
+                    ctx.fill();
+                    ctx.fillStyle = "#bfe4ff";
+                    ctx.fillText(gid, R * .5, R * .62 + u * .15);
+                    ctx.restore();
+                }
             }
             else
                 switch (o.t) {
@@ -98049,10 +98271,20 @@ function gdParseFile(u8, defs) {
     var t0 = txt.replace(/^\s+/, "");
     if (t0.charAt(0) === "{") {
         var j = JSON.parse(txt);
-        var d = j.data && j.data.objects ? j.data : j;
+        var info = j.level && typeof j.level === "object" ? j.level : j;
+        var nm = j.name || info.name || "";
+        var ds = j.desc || j.description || info.desc || info.description || "";
+        var inner = typeof j.data === "string" ? j.data : typeof info.data === "string" ? info.data : null;
+        if (inner) {
+            var sub = gdParseFile(new TextEncoder().encode(inner), defs);
+            sub.name = nm || sub.name || "";
+            sub.desc = ds || sub.desc || "";
+            return sub;
+        }
+        var d = j.data && j.data.objects ? j.data : info.objects ? info : j;
         if (!d.objects)
             throw new Error("fmt");
-        return { settings: Object.assign({ mode: "cube", speed: 1, bg: "#2850d8", ground: "#1a3aa8", mini: false, song: 0 }, d.settings || {}), objects: d.objects, skipped: 0, name: j.name || "", desc: j.description || "" };
+        return { settings: Object.assign({ mode: "cube", speed: 1, bg: "#2850d8", ground: "#1a3aa8", mini: false, song: 0 }, d.settings || {}), objects: d.objects, skipped: 0, name: nm, desc: ds };
     }
     var lv = null;
     if (t0.charAt(0) === "<") {
@@ -98541,7 +98773,7 @@ function ObjThumb(_a) {
             x: 0,
             y: 0,
             r: 0,
-            color: ((_a = __GD52__1.DEF[t]) === null || _a === void 0 ? void 0 : _a.kind) === "decor" ? void 0 : "#00f0ff"
+            color: ((_a = __GD52__1.DEF[t]) === null || _a === void 0 ? void 0 : _a.kind) === "decor" ? void 0 : __GD52__1.DEF[t].color === "#ffffff" ? "#dce8ff" : __GD52__1.DEF[t].color
         }, (size - W * u) / 2, (size + H * u) / 2, u, {
             t: 0,
             editor: true
