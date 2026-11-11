@@ -1,7 +1,7 @@
 /* Geometry Dash Web - nucleo del backend (usato dal browser in modalita' locale e dal server condiviso) */
 function GDCore(env) {
   "use strict";
-  function emptyDb() { return { users: {}, session: null, progress: {}, levels: [], likes: {} }; }
+  function emptyDb() { return { users: {}, session: null, progress: {}, levels: [], likes: {}, saves: {} }; }
   var db;
   db = env.load() || emptyDb();
   var base = emptyDb(); Object.keys(base).forEach(function (k) { if (db[k] === undefined) db[k] = base[k]; });
@@ -66,6 +66,17 @@ function GDCore(env) {
     p.levels[r.level_key] = cur;
     return p;
   }
+  function savedFor(u) {
+    var sv = db.saves[u.user_id];
+    if (!sv) {
+      sv = db.saves[u.user_id] = {};
+      var p = db.progress[u.user_id];
+      if (p && p.levels) Object.keys(p.levels).forEach(function (k) {
+        if (k.indexOf("online:") === 0) sv[k.slice(7)] = "";
+      });
+    }
+    return sv;
+  }
 
   /* ---- livelli ---- */
   var DIFFS = ["easy", "normal", "hard", "harder", "insane", "demon", "mythic", "epic", "legendary"];
@@ -73,6 +84,7 @@ function GDCore(env) {
   function isAdmin(u) { return !!u && ADMINS.indexOf(u.username.toLowerCase()) >= 0; }
   if (!db.rates) db.rates = {};
   if (!db.approved) db.approved = {};
+  if (!db.saves) db.saves = {};
   function rating(l, u) {
     var votes = db.rates[l.id] || {}, counts = {}, k;
     DIFFS.forEach(function (d) { counts[d] = 0; });
@@ -93,7 +105,7 @@ function GDCore(env) {
       difficulty: rt.difficulty, difficulty_approved: rt.difficulty_approved, difficulty_pending: rt.difficulty_pending, rate_counts: rt.rate_counts, my_rate: rt.my_rate, can_approve: rt.can_approve,
       id: l.id, name: l.name, description: l.description, data: l.data, version: l.version,
       verified: !!l.verified, published: !!l.published, plays: l.plays || 0,
-      likes: Object.keys(likes).length, liked: !!(u && likes[u.user_id]),
+      likes: Object.keys(likes).length,      liked: !!(u && likes[u.user_id]), saved: !!(u && db.saves[u.user_id] && db.saves[u.user_id][l.id]),
       author_name: l.author_name, user_id: l.user_id, created_at: l.created_at, updated_at: l.updated_at
     };
   }
@@ -170,6 +182,13 @@ function GDCore(env) {
     }
     if (path === "/levels/online" && method === "GET") {
       var q = (query.get("q") || "").toLowerCase(), sort = query.get("sort") || "recent";
+      if (sort === "saved") {
+        if (!u) return json(200, []);
+        var sv = savedFor(u);
+        var savedList = db.levels.filter(function (x) { return x.published && sv[x.id] !== undefined && (!q || (x.name + " " + x.author_name).toLowerCase().indexOf(q) >= 0); }).map(function (x) { return lv(x, u); });
+        savedList.sort(function (a, c) { return (sv[c.id] || "") < (sv[a.id] || "") ? -1 : 1; });
+        return json(200, savedList);
+      }
       var list = db.levels.filter(function (x) { return x.published && (!q || (x.name + " " + x.author_name).toLowerCase().indexOf(q) >= 0); }).map(function (x) { return lv(x, u); });
       list.sort(function (a, c) {
         if (sort === "liked") return c.likes - a.likes;
@@ -183,7 +202,7 @@ function GDCore(env) {
       if (!l) return err(404, "Livello non trovato");
       var act = m[2], owner = !!(u && l.user_id === u.user_id);
       if (!act && method === "GET") return (owner || l.published) ? json(200, lv(l, u)) : err(404, "Livello non trovato");
-      if (!act && method === "DELETE") { if (!owner) return err(403, "Non consentito"); db.levels = db.levels.filter(function (x) { return x !== l; }); save(); return new Response(null, { status: 204 }); }
+      if (!act && method === "DELETE") { if (!owner) return err(403, "Non consentito"); db.levels = db.levels.filter(function (x) { return x !== l; }); Object.keys(db.saves).forEach(function (uid) { if (db.saves[uid]) delete db.saves[uid][l.id]; }); save(); return new Response(null, { status: 204 }); }
       if (!act && method === "PUT") {
         if (!owner) return err(403, "Non consentito");
         b = body(init);
@@ -208,6 +227,12 @@ function GDCore(env) {
         if (lk[u.user_id]) delete lk[u.user_id]; else lk[u.user_id] = true;
         save(); return json(200, lv(l, u));
       }
+      if (act === "save" && (method === "POST" || method === "DELETE")) {
+        if (!u) return err(401, "Accedi per salvare i livelli");
+        var sv = savedFor(u);
+        if (method === "DELETE") delete sv[l.id]; else sv[l.id] = new Date().toISOString();
+        save(); return json(200, { saved: !!sv[l.id] });
+      }
       if (act === "rate" && method === "POST") {
         if (!u) return err(401, "Accedi per votare la difficolt\u00e0");
         if (!l.published) return err(400, "Puoi votare solo i livelli pubblicati");
@@ -225,7 +250,7 @@ function GDCore(env) {
         else { if (DIFFS.indexOf(ad) < 0) return err(422, "Difficolt\u00e0 non valida"); db.approved[l.id] = ad; }
         save(); return json(200, lv(l, u));
       }
-      if (act === "play" && method === "POST") { l.plays = (l.plays || 0) + 1; save(); return json(200, { ok: true }); }
+      if (act === "play" && method === "POST") { l.plays = (l.plays || 0) + 1; if (u) savedFor(u)[l.id] = new Date().toISOString(); save(); return json(200, { ok: true }); }
     }
     return err(404, "Not found");
   }

@@ -85674,6 +85674,12 @@ var DICT = {
     published: ["Pubblicato", "Published"],
     save: ["Salva", "Save"],
     saved: ["Salvato", "Saved"],
+    savedLevels: ["Salvati", "Saved"],
+    savedEmpty: ["Nessun livello provato. Gioca a un livello online per ritrovarlo qui.", "No played levels yet. Play an online level to find it here."],
+    savedLogin: ["Accedi per vedere i livelli che hai provato.", "Log in to see the levels you've played."],
+    removeSaved: ["Rimuovi", "Remove"],
+    removedSaved: ["Rimosso dai salvati.", "Removed from saved."],
+    levelDeleted: ["Livello eliminato.", "Level deleted."],
     playtest: ["Prova", "Playtest"],
     verify: ["Verifica", "Verify"],
     publish: ["Pubblica", "Publish"],
@@ -105067,7 +105073,8 @@ var _s = $RefreshSig$();
 var SORTS = [
     "recent",
     "liked",
-    "popular"
+    "popular",
+    "saved"
 ];
 function Online() {
     var _this = this;
@@ -105081,13 +105088,29 @@ function Online() {
         queryKey: [
             "online",
             q,
-            sort
+            sort,
+            me.data ? me.data.user_id : "guest"
         ],
         queryFn: function () { return (0, __GD57__1.apiGet)("/levels/online?q=".concat(encodeURIComponent(q), "&sort=").concat(sort)); }
     });
     var like = (0, __GD6__1.useMutation)({
         mutationFn: function (id) { return (0, __GD57__1.apiPost)("/levels/".concat(id, "/like")); },
         onSuccess: function () { return __GD63__1.queryClient.invalidateQueries({ queryKey: ["online"] }); }
+    });
+    var removeSaved = (0, __GD6__1.useMutation)({
+        mutationFn: function (id) { return (0, __GD57__1.apiDelete)("/levels/".concat(id, "/save")); },
+        onSuccess: function () {
+            __GD63__1.queryClient.invalidateQueries({ queryKey: ["online"] });
+            (0, __GD23__1.toast)(t("removedSaved"));
+        }
+    });
+    var removeLevel = (0, __GD6__1.useMutation)({
+        mutationFn: function (id) { return (0, __GD57__1.apiDelete)("/levels/".concat(id)); },
+        onSuccess: function () {
+            __GD63__1.queryClient.invalidateQueries({ queryKey: ["online"] });
+            __GD63__1.queryClient.invalidateQueries({ queryKey: ["mine"] });
+            (0, __GD23__1.toast)(t("levelDeleted"));
+        }
     });
     return _jsxDEV("div", {
         className: "relative min-h-screen gd-grid-bg",
@@ -105181,7 +105204,7 @@ function Online() {
                         columnNumber: 9
                     }, this),
                     _jsxDEV("div", {
-                        className: "mt-5 flex gap-2",
+                        className: "mt-5 flex flex-wrap gap-2",
                         "data-testid": "online-sort-tabs",
                         "x-file-name": "Online",
                         "x-line-number": "40",
@@ -105203,7 +105226,7 @@ function Online() {
                             "x-dynamic": "true",
                             "x-source-type": "computed",
                             "x-source-editable": "false",
-                            children: t(s)
+                            children: t(s === "saved" ? "savedLevels" : s)
                         }, s, false, {
                             fileName: _jsxFileName,
                             lineNumber: 40,
@@ -105259,7 +105282,16 @@ function Online() {
                                 lineNumber: 46,
                                 columnNumber: 30
                             }, this),
-                            ((_a = list.data) === null || _a === void 0 ? void 0 : _a.length) === 0 && _jsxDEV("p", {
+                            sort === "saved" && !me.data && _jsxDEV("p", {
+                                className: "font-mono text-white/50",
+                                "data-testid": "online-saved-login",
+                                children: t("savedLogin")
+                            }, void 0, false, {
+                                fileName: _jsxFileName,
+                                lineNumber: 48,
+                                columnNumber: 31
+                            }, this),
+                            ((_a = list.data) === null || _a === void 0 ? void 0 : _a.length) === 0 && !(sort === "saved" && !me.data) && _jsxDEV("p", {
                                 className: "font-mono text-white/50",
                                 "data-testid": "online-empty",
                                 "x-file-name": "Online",
@@ -105270,7 +105302,7 @@ function Online() {
                                 "x-dynamic": "true",
                                 "x-source-type": "computed",
                                 "x-source-editable": "false",
-                                children: t("noLevels")
+                                children: t(sort === "saved" ? "savedEmpty" : "noLevels")
                             }, void 0, false, {
                                 fileName: _jsxFileName,
                                 lineNumber: 47,
@@ -105497,6 +105529,28 @@ function Online() {
                                         fileName: _jsxFileName,
                                         lineNumber: 65,
                                         columnNumber: 15
+                                    }, _this),
+                                    sort === "saved" && _jsxDEV("button", {
+                                        onClick: function () { return removeSaved.mutate(l.id); },
+                                        className: "rounded-xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-white/70 transition-transform duration-150 active:scale-90",
+                                        "data-testid": "online-level-unsave-button",
+                                        title: t("removeSaved"),
+                                        children: t("removeSaved")
+                                    }, "unsave-".concat(l.id), false, {
+                                        fileName: _jsxFileName,
+                                        lineNumber: 66,
+                                        columnNumber: 14
+                                    }, _this),
+                                    me.data && me.data.user_id === l.user_id && _jsxDEV("button", {
+                                        onClick: function () { if (window.confirm(t("confirmDelete"))) removeLevel.mutate(l.id); },
+                                        className: "rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 font-mono text-sm text-red-300 transition-transform duration-150 active:scale-90",
+                                        "data-testid": "online-level-delete-button",
+                                        title: t("delete"),
+                                        children: t("delete")
+                                    }, "delete-".concat(l.id), false, {
+                                        fileName: _jsxFileName,
+                                        lineNumber: 67,
+                                        columnNumber: 14
                                     }, _this),
                                     _jsxDEV(__GD16__1.Link, {
                                         to: "/play/online/".concat(l.id),
