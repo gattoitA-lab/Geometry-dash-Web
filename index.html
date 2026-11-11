@@ -80317,7 +80317,7 @@ function addUserTrack(file) {
                     throw new Error("Formato audio non supportato da questo browser");
                 case 5:
                     id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-                    meta = { id: id, name: String(file.name || "audio").replace(/\.[^.]+$/, "").slice(0, 40), size: file.size, dur: decoded.duration };
+                    meta = { id: id, name: String(file.name || "audio").replace(/\.[^.]+$/, "").slice(0, 40), file: String(file.name || "audio").slice(0, 80), size: file.size, dur: decoded.duration };
                     bufCache.set(id, decoded);
                     _a.label = 6;
                 case 6:
@@ -83238,6 +83238,69 @@ function levelLength(data) {
     }
     return m;
 }
+var GD_TRIO_MAX = 15;
+function gdTimeLabel(sec) {
+    var total = Math.max(0, Math.ceil(Number(sec) || 0));
+    var mm = Math.floor(total / 60);
+    var ss = total % 60;
+    return mm + ":" + (ss < 10 ? "0" : "") + ss;
+}
+function gdLevelSeconds(data) {
+    var settings = (data && data.settings) || {};
+    var length = levelLength(data || { objects: [] });
+    var speed = Math.max(0, Math.min(4, Math.floor(Number(settings.speed))));
+    if (!isFinite(speed))
+        speed = 1;
+    var changes = [];
+    var objs = (data && data.objects) || [];
+    for (var i = 0; i < objs.length; i++) {
+        var id = String(objs[i].t || "");
+        if (id.indexOf("speed_") !== 0)
+            continue;
+        var next = Number(id.slice(6));
+        if (!isFinite(next) || next < 0 || next > 4)
+            continue;
+        changes.push({ x: Math.max(0, Number(objs[i].x) || 0), v: next });
+    }
+    changes.sort(function (a, b) { return a.x - b.x; });
+    var total = 0;
+    var x = 0;
+    var j = 0;
+    while (x < length) {
+        while (j < changes.length && changes[j].x <= x) {
+            speed = changes[j].v;
+            j++;
+        }
+        var nx = j < changes.length ? Math.min(length, changes[j].x) : length;
+        if (nx <= x)
+            break;
+        total += (nx - x) / (__GD52__1.SPEEDS[speed] || 8.37);
+        x = nx;
+    }
+    return Math.max(1, Math.ceil(total));
+}
+function gdSongLabel(settings, lang) {
+    settings = settings || {};
+    if (settings.songFile)
+        return String(settings.songFile);
+    if (settings.songName)
+        return String(settings.songName);
+    var song = settings.song;
+    if (typeof song === "string") {
+        if (song.indexOf("u:") === 0)
+            return lang === "en" ? "Local audio file" : "File audio locale";
+        return song;
+    }
+    return (lang === "en" ? "Generated track #" : "Traccia generata #") + (Number(song) || 0);
+}
+window.__gdLevelInfo = function (data, lang) {
+    var seconds = gdLevelSeconds(data);
+    return {
+        seconds: seconds,
+        duration: gdTimeLabel(seconds),
+        song: gdSongLabel(data && data.settings, lang)
+    };
+};
 var rgbaOf = function (hex, a) {
     var n = parseInt(String(hex).replace("#", "").padEnd(6, "0").slice(0, 6), 16);
     return "rgba(".concat(n >> 16 & 255, ",").concat(n >> 8 & 255, ",").concat(n & 255, ",").concat(a, ")");
@@ -83508,6 +83571,13 @@ function applyShaders(ctx, fx, time) {
         ctx.restore();
     }
 }
+var GD_MAX_ICONS = 15;
+function trailList() {
+    var out = [];
+    for (var i = 0; i < GD_MAX_ICONS; i++)
+        out.push([]);
+    return out;
+}
 var Engine = (function () {
     function Engine(data, opts) {
         var e_5, _a, e_6, _b, e_7, _c;
@@ -83545,7 +83615,7 @@ var Engine = (function () {
         this.lastCp = 0;
         this.camY = -2;
         this.particles = [];
-        this.trails = [[], [], []];
+        this.trails = trailList();
         this.flash = 0;
         this.shake = 0;
         this.gs = new Map();
@@ -83592,6 +83662,7 @@ var Engine = (function () {
         this.songStartTime = 0;
         this.coinCount = 0;
         this.data = data;
+        this.maxIcons = Math.max(3, Math.min(GD_MAX_ICONS, Number(data.settings && data.settings.trioMax) || 3));
         this.opts = opts;
         this.mp = opts.mp || null;
         this.practice = !!opts.practice;
@@ -83880,7 +83951,7 @@ var Engine = (function () {
         this.camY = sp ? sp.y - 2 : this.bounds ? this.bounds.floor - .5 : -2;
         this.time = 0;
         this.lastCp = 0;
-        this.trails = [[], [], []];
+        this.trails = trailList();
         this.state = "playing";
         this.stateTime = 0;
         if (!first)
@@ -84028,7 +84099,7 @@ var Engine = (function () {
         this.startPos = null;
     };
     Engine.prototype.restore = function (s, keepAttempt) {
-        this.players = s.players.map(function (p) { return (__assign({}, p)); });
+        this.players = s.players.map(function (p) { return (__assign({}, p)); }).slice(0, this.maxIcons);
         this.speed = s.speed;
         this.playDir = s.playDir === -1 ? -1 : 1;
         this.channel = Math.max(0, Number(s.channel) || 0);
@@ -84070,7 +84141,7 @@ var Engine = (function () {
             else
                 __GD47__1.audio.play(sg, songAt);
         }
-        this.trails = [[], [], []];
+        this.trails = trailList();
         this.state = "playing";
         this.stateTime = 0;
         if (!keepAttempt)
@@ -84823,11 +84894,13 @@ var Engine = (function () {
                 }
                 if (!this.triple) {
                     this.triple = true;
-                    if (this.players.length < 3) {
+                    var want3 = Math.max(3, Math.min(GD_MAX_ICONS, this.maxIcons || 3));
+                    while (this.players.length < want3) {
                         var base3 = this.players[0];
-                        var p3 = __assign({}, base3, { x: Math.max(0, base3.x - 1.25), second: false, third: true });
+                        var index3 = this.players.length;
+                        var p3 = __assign({}, base3, { x: Math.max(0, base3.x - 1.25 * (index3 - 1)), second: false, third: true });
                         this.players.push(p3);
-                        this.trails[2] = [];
+                        this.trails[index3] = [];
                     }
                 }
                 break;
@@ -84837,7 +84910,7 @@ var Engine = (function () {
                     var only3 = this.players.find(function (q) { return !q.second && !q.third; }) || this.players[0];
                     this.players = [only3];
                     this.dual = false;
-                    this.trails = [[], [], []];
+                    this.trails = trailList();
                     this.setBoundsFrom(o, only3.mode);
                 }
                 break;
@@ -84847,7 +84920,7 @@ var Engine = (function () {
                     this.triple = false;
                     var keep = this.players.find(function (q) { return !q.second && !q.third; }) || this.players[0];
                     this.players = [keep];
-                    this.trails = [[], [], []];
+                    this.trails = trailList();
                     this.setBoundsFrom(o, keep.mode);
                 }
                 break;
@@ -85924,6 +85997,7 @@ var DICT = {
     groundColor: ["Colore terreno", "Ground color"],
     startMini: ["Inizia mini", "Start mini"],
     song: ["Canzone (seed)", "Song (seed)"],
+    trioIcons: ["Portale trio: max icone (3–15)", "Trio portal: max icons (3–15)"],
     text: ["Testo", "Text"],
     color: ["Colore", "Color"],
     unsaved: ["Modifiche non salvate", "Unsaved changes"],
@@ -86106,7 +86180,8 @@ function GameCanvas(_a) {
     var _this = this;
     var level = _a.level, title = _a.title, icons = _a.icons, startPractice = _a.startPractice, _b = _a.allowPractice, allowPractice = _b === void 0 ? true : _b, badge = _a.badge, mp = _a.mp, onExit = _a.onExit, onDeath = _a.onDeath, onComplete = _a.onComplete;
     _s();
-    var _d = __read((0, __GD59__1.useLang)(), 2), t = _d[1];
+    var _d = __read((0, __GD59__1.useLang)(), 2), lang = _d[0], t = _d[1];
+    var levelInfo = window.__gdLevelInfo ? window.__gdLevelInfo(level, lang) : null;
     var canvasRef = useRef(null);
     var barRef = useRef(null);
     var pctRef = useRef(null);
@@ -86409,6 +86484,11 @@ function GameCanvas(_a) {
                                 lineNumber: 172,
                                 columnNumber: 11
                             }, this),
+                            levelInfo && _jsxDEV("span", {
+                                className: "max-w-[220px] truncate text-white/60",
+                                "data-testid": "game-level-meta",
+                                children: "⏱ " + levelInfo.duration + " · ♪ " + levelInfo.song
+                            }, void 0, false, {}, void 0),
                             badge && _jsxDEV("span", {
                                 className: "rounded bg-[#ffe600] px-2 py-0.5 font-bold text-black",
                                 "data-testid": "game-badge",
@@ -96086,7 +96166,8 @@ var emptyLevel = function () { return ({
         bg: "#2850d8",
         ground: "#1a3aa8",
         mini: false,
-        song: 0
+        song: 0,
+        trioMax: 3
     },
     objects: []
 }); };
@@ -97040,7 +97121,8 @@ function buildMain(num) {
             bg: L.colors[0],
             ground: hex(L.colors[0], .62),
             mini: false,
-            song: num * 31 + 5
+            song: num * 31 + 5,
+            trioMax: 3
         },
         objects: objs
     };
@@ -98532,7 +98614,7 @@ function MusicPicker(_a) {
                     return [4, refresh()];
                 case 3:
                     _a.sent();
-                    onPick("u:" + m.id);
+                    onPick("u:" + m.id, m);
                     __GD23__1.toast.success(T("Musica caricata: ", "Music loaded: ") + m.name);
                     return [3, 5];
                 case 4:
@@ -98560,7 +98642,7 @@ function MusicPicker(_a) {
         pl.current = true;
         setPlaying(true);
     };
-    var pick = function (v) { stopPrev(); onPick(v); };
+    var pick = function (v) { stopPrev(); var tr = null; for (var i = 0; i < tracks.length; i++) { if ("u:" + tracks[i].id === v) { tr = tracks[i]; break; } } onPick(v, tr); };
     var del = function () { return __awaiter(_this, void 0, void 0, function () { return __generator(this, function (_a) {
         switch (_a.label) {
             case 0:
@@ -99550,7 +99632,7 @@ function SelectionPanel(p) {
         kids.push(__h("label", { key: "col", style: UI.label }, T("Colore", "Color"), __h("input", { type: "color", value: s.color || def.color || "#00f0ff", onChange: function (e) { return p.updateSel({ color: e.target.value }); }, "data-testid": "editor-selected-color-input" })));
     if (s.t === "trigger_music") {
         kids.push(__h("label", { key: "sg", style: UI.label }, T("Canzone (seed)", "Song (seed)"), __h("input", { type: "number", min: 1, max: 9999, value: typeof s.song === "string" ? 1 : ((_e = s.song) !== null && _e !== void 0 ? _e : 1), style: __assign(__assign({}, UI.input), { width: 90 }), onChange: function (e) { return p.updateSel({ song: Math.max(1, Math.min(9999, Number(e.target.value) || 1)) }); }, "data-testid": "editor-trigger-song" })));
-        kids.push(__h(MusicPicker, { key: "mp", value: s.song, onPick: function (v) { return p.updateSel({ song: v }); }, lang: lang }));
+        kids.push(__h(MusicPicker, { key: "mp", value: s.song, onPick: function (v, tr) { return p.updateSel({ song: v, songName: tr ? tr.name : undefined, songFile: tr ? (tr.file || tr.name) : undefined }); }, lang: lang }));
         if (typeof s.song !== "string")
             kids.push(__h(SongTools, { key: "st", seed: (_f = s.song) !== null && _f !== void 0 ? _f : 1, lang: lang }));
         kids.push(__h("p", { key: "sn", style: __assign(__assign({}, UI.mono), { margin: 0, fontSize: 11 }) }, T("Quando il giocatore lo supera, la musica attuale si ferma e parte questa.", "When the player passes it, the current music stops and this one starts.")));
@@ -99745,7 +99827,7 @@ function InfoPanel(p) {
         kids.push(__h("label", { key: "col", style: UI.label }, T("Colore", "Color"), __h("input", { type: "color", value: s.color || def.color || "#00f0ff", onChange: function (e) { return p.updateSel({ color: e.target.value }); }, "data-testid": "editor-selected-color-input" })));
     if (s.t === "trigger_music") {
         kids.push(__h("label", { key: "sg", style: UI.label }, T("Canzone (seed)", "Song (seed)"), __h("input", { type: "number", min: 1, max: 9999, value: typeof s.song === "string" ? 1 : ((_b = s.song) !== null && _b !== void 0 ? _b : 1), style: __assign(__assign({}, UI.input), { width: 90 }), onChange: function (e) { return p.updateSel({ song: Math.max(1, Math.min(9999, Number(e.target.value) || 1)) }); }, "data-testid": "editor-trigger-song" })));
-        kids.push(__h(MusicPicker, { key: "mp", value: s.song, onPick: function (v) { return p.updateSel({ song: v }); }, lang: lang }));
+        kids.push(__h(MusicPicker, { key: "mp", value: s.song, onPick: function (v, tr) { return p.updateSel({ song: v, songName: tr ? tr.name : undefined, songFile: tr ? (tr.file || tr.name) : undefined }); }, lang: lang }));
         if (typeof s.song !== "string")
             kids.push(__h(SongTools, { key: "st", seed: (_d = s.song) !== null && _d !== void 0 ? _d : 1, lang: lang }));
         kids.push(__h("p", { key: "sn", style: __assign(__assign({}, UI.mono), { margin: 0, fontSize: 11 }) }, T("Quando il giocatore lo supera, la musica attuale si ferma e parte questa.", "When the player passes it, the current music stops and this one starts.")));
@@ -101709,7 +101791,7 @@ function Editor() {
                                                     min: 0,
                                                     max: 9999,
                                                     value: typeof data.settings.song === "string" ? 1 : data.settings.song,
-                                                    onChange: function (e) { return setSettings({ song: Number(e.target.value) || 0 }); },
+                                                    onChange: function (e) { return setSettings({ song: Number(e.target.value) || 0, songName: undefined, songFile: undefined }); },
                                                     className: "h-9 bg-black/40",
                                                     "data-testid": "editor-settings-song",
                                                     "x-file-name": "Editor",
@@ -101727,9 +101809,9 @@ function Editor() {
                                             fileName: _jsxFileName,
                                             lineNumber: 643,
                                             columnNumber: 15
-                                        }, this), __h(GdFilePanel, { data: data, name: name, desc: desc, lang: lang, onSong: function (v) { return setSettings({ song: v }); }, onLoad: function (d, n, ds) { history.current.push(live.current.data.objects); setData(d); if (n)
+                                        }, this), __h("label", { className: "grid gap-1", "data-testid": "editor-settings-trio-label" }, t("trioIcons"), __h("input", { type: "number", min: 3, max: 15, value: Number(data.settings.trioMax) || 3, onChange: function (e) { return setSettings({ trioMax: Math.max(3, Math.min(15, Number(e.target.value) || 3)) }); }, className: "h-9 rounded-md border border-white/10 bg-black/40 px-2", "data-testid": "editor-settings-trio-max" })), __h(GdFilePanel, { data: data, name: name, desc: desc, lang: lang, onSong: function (v) { return setSettings({ song: v, songName: undefined, songFile: undefined }); }, onLoad: function (d, n, ds) { history.current.push(live.current.data.objects); setData(d); if (n)
                                                 setName(n); if (ds)
-                                                setDesc(ds); setDirty(true); } }), __h(MusicPicker, { value: data.settings.song, onPick: function (v) { return setSettings({ song: v }); }, lang: lang }), typeof data.settings.song === "string" ? null : __h(SongTools, { seed: data.settings.song || 1, lang: lang })
+                                                setDesc(ds); setDirty(true); } }), __h(MusicPicker, { value: data.settings.song, onPick: function (v, tr) { return setSettings({ song: v, songName: tr ? tr.name : undefined, songFile: tr ? (tr.file || tr.name) : undefined }); }, lang: lang }), typeof data.settings.song === "string" ? null : __h(SongTools, { seed: data.settings.song || 1, lang: lang })
                                     ]
                                 }, void 0, true, {
                                     fileName: _jsxFileName,
@@ -103408,6 +103490,7 @@ function Levels() {
     }, [idx, nav]);
     var L = __GD50__1.MAIN_LEVELS[idx];
     var lp = progress === null || progress === void 0 ? void 0 : progress.levels[L.key];
+    var lvInfo = window.__gdLevelInfo ? window.__gdLevelInfo(__GD50__1.buildMain(L.num), lang) : { duration: "--:--", song: "" };
     var demon = L.difficulty === "demon";
     return _jsxDEV("div", {
         className: "relative min-h-screen overflow-hidden gd-grid-bg",
@@ -103608,6 +103691,11 @@ function Levels() {
                                                     lineNumber: 53,
                                                     columnNumber: 17
                                                 }, this),
+                                                _jsxDEV("p", {
+                                                    className: "mt-1 max-w-full truncate font-mono text-xs text-white/80",
+                                                    "data-testid": "level-card-meta",
+                                                    children: "⏱ " + lvInfo.duration + " · ♪ " + lvInfo.song
+                                                }, void 0, false, {}, void 0),
                                                 _jsxDEV("div", {
                                                     className: "mt-2 flex items-center gap-4 font-mono text-white",
                                                     "x-file-name": "Levels",
@@ -105293,7 +105381,7 @@ function Online() {
     var _this = this;
     var _a, _b;
     _s();
-    var _d = __read((0, __GD59__1.useLang)(), 2), t = _d[1];
+    var _d = __read((0, __GD59__1.useLang)(), 2), lang = _d[0], t = _d[1];
     var me = (0, __GD62__1.useMe)();
     var _e = __read(useState(""), 2), q = _e[0], setQ = _e[1];
     var _f = __read(useState("recent"), 2), sort = _f[0], setSort = _f[1];
@@ -105521,7 +105609,7 @@ function Online() {
                                 lineNumber: 47,
                                 columnNumber: 39
                             }, this),
-                            !list.isError && ((_b = list.data) === null || _b === void 0 ? void 0 : _b.map(function (l, i) { return _jsxDEV("div", {
+                            !list.isError && ((_b = list.data) === null || _b === void 0 ? void 0 : _b.map(function (l, i) { var lvInfo = l.data && window.__gdLevelInfo ? window.__gdLevelInfo(l.data, lang) : null; return _jsxDEV("div", {
                                 className: "flex flex-wrap items-center gap-4 rounded-2xl border border-white/10 bg-[#121824]/85 p-4 backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-300",
                                 style: { animationDelay: "".concat(i * 30, "ms") },
                                 "data-testid": "online-level-".concat(l.id),
@@ -105562,6 +105650,11 @@ function Online() {
                                                 lineNumber: 52,
                                                 columnNumber: 17
                                             }, _this),
+                                            lvInfo && _jsxDEV("p", {
+                                                className: "mt-0.5 max-w-full truncate font-mono text-xs text-white/60",
+                                                "data-testid": "online-level-meta",
+                                                children: "⏱ " + lvInfo.duration + " · ♪ " + lvInfo.song
+                                            }, void 0, false, {}, void 0),
                                             _jsxDEV("p", {
                                                 className: "flex items-center gap-1 text-sm text-white/50",
                                                 "x-file-name": "Online",
