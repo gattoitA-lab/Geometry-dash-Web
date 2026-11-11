@@ -2523,7 +2523,10 @@ var require_react_development = (0, __GD20__1.t)((function (exports, module) {
                 },
                 set: function (name) {
                     ownName = name;
-                    render.name || render.displayName || (Object.defineProperty(render, "name", { value: name }), render.displayName = name);
+                    if (!render.name && !render.displayName) {
+                        try { Object.defineProperty(render, "name", { value: name }); } catch (e) {}
+                        render.displayName = name;
+                    }
                 }
             });
             return elementType;
@@ -2567,7 +2570,10 @@ var require_react_development = (0, __GD20__1.t)((function (exports, module) {
                 },
                 set: function (name) {
                     ownName = name;
-                    type.name || type.displayName || (Object.defineProperty(type, "name", { value: name }), type.displayName = name);
+                    if (!type.name && !type.displayName) {
+                        try { Object.defineProperty(type, "name", { value: name }); } catch (e) {}
+                        type.displayName = name;
+                    }
                 }
             });
             return compare;
