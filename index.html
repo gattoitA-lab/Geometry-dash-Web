@@ -1804,6 +1804,74 @@ if (typeof module !== "undefined")
 
 </script>
 <script>
+/* TextEncoder/TextDecoder per Safari 9: UTF-8 puro, usato solo se manca l'API nativa. */
+(function (g) {
+  "use strict";
+  function toBytes(input) {
+    if (input == null) return new Uint8Array(0);
+    if (input instanceof Uint8Array) return input;
+    if (typeof ArrayBuffer !== "undefined" && input instanceof ArrayBuffer) return new Uint8Array(input);
+    if (input.buffer && typeof input.byteLength === "number") {
+      return new Uint8Array(input.buffer, input.byteOffset || 0, input.byteLength);
+    }
+    return new Uint8Array(input);
+  }
+  function encodeUtf8(value) {
+    var text = value === undefined ? "" : String(value);
+    var out = [], i, c, d;
+    for (i = 0; i < text.length; i++) {
+      c = text.charCodeAt(i);
+      if (c < 0x80) out.push(c);
+      else if (c < 0x800) out.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
+      else if (c >= 0xd800 && c <= 0xdbff) {
+        d = text.charCodeAt(i + 1);
+        if (d >= 0xdc00 && d <= 0xdfff) {
+          c = 0x10000 + ((c - 0xd800) << 10) + (d - 0xdc00);
+          i++;
+          out.push(0xf0 | (c >> 18), 0x80 | ((c >> 12) & 0x3f), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+        } else out.push(0xef, 0xbf, 0xbd);
+      } else if (c >= 0xdc00 && c <= 0xdfff) out.push(0xef, 0xbf, 0xbd);
+      else out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+    }
+    return new Uint8Array(out);
+  }
+  function decodeUtf8(input) {
+    var bytes = toBytes(input), out = "", i = 0, b, c, n, cp, ok, j;
+    while (i < bytes.length) {
+      b = bytes[i++];
+      if (b < 0x80) { out += String.fromCharCode(b); continue; }
+      if (b >= 0xc2 && b <= 0xdf) { n = 1; cp = b & 0x1f; }
+      else if (b >= 0xe0 && b <= 0xef) { n = 2; cp = b & 0x0f; }
+      else if (b >= 0xf0 && b <= 0xf4) { n = 3; cp = b & 0x07; }
+      else { out += "\ufffd"; continue; }
+      if (i + n > bytes.length) { out += "\ufffd"; break; }
+      ok = true;
+      for (j = 0; j < n; j++) {
+        c = bytes[i++];
+        if ((c & 0xc0) !== 0x80) { ok = false; i--; break; }
+        cp = (cp << 6) | (c & 0x3f);
+      }
+      if (!ok) { out += "\ufffd"; continue; }
+      if (cp > 0x10ffff) out += "\ufffd";
+      else if (cp >= 0x10000) { cp -= 0x10000; out += String.fromCharCode(0xd800 + (cp >> 10), 0xdc00 + (cp & 0x3ff)); }
+      else out += String.fromCharCode(cp);
+    }
+    return out;
+  }
+  function TextEncoder() {}
+  TextEncoder.prototype.encoding = "utf-8";
+  TextEncoder.prototype.encode = function (value) { return encodeUtf8(value); };
+  function TextDecoder(encoding, options) {
+    this.encoding = "utf-8";
+    this.fatal = !!(options && options.fatal);
+    this.ignoreBOM = !!(options && options.ignoreBOM);
+  }
+  TextDecoder.prototype.decode = function (input) { return decodeUtf8(input); };
+  if (typeof g.TextEncoder !== "function") g.TextEncoder = TextEncoder;
+  if (typeof g.TextDecoder !== "function") g.TextDecoder = TextDecoder;
+})(typeof window !== "undefined" ? window : this);
+</script>
+<script>
 (function(){
 window.$RefreshReg$ = function () {};
 window.$RefreshSig$ = function () { return function (t) { return t; }; };
