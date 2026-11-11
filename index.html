@@ -83295,10 +83295,12 @@ function gdSongLabel(settings, lang) {
 }
 window.__gdLevelInfo = function (data, lang) {
     var seconds = gdLevelSeconds(data);
+    var platformer = !!(data && data.settings && data.settings.platformer);
     return {
         seconds: seconds,
-        duration: gdTimeLabel(seconds),
-        song: gdSongLabel(data && data.settings, lang)
+        duration: platformer ? "--:--" : gdTimeLabel(seconds),
+        song: gdSongLabel(data && data.settings, lang),
+        platformer: platformer
     };
 };
 var rgbaOf = function (hex, a) {
@@ -83595,6 +83597,8 @@ var Engine = (function () {
         this.dual = false;
         this.triple = false;
         this.mirror = false;
+        this.platformer = !!(data.settings && data.settings.platformer);
+        this.walkDir = 0;
         this.mirrorAnim = 0;
         this.used = new Set();
         this.holding = false;
@@ -83938,6 +83942,8 @@ var Engine = (function () {
         this.dual = false;
         this.triple = false;
         this.mirror = false;
+        this.platformer = !!st.platformer;
+        this.walkDir = 0;
         this.used.clear();
         this.objs.forEach(function (o) { o.broken = false; o.hit = false; });
         this.coins = [
@@ -83990,6 +83996,9 @@ var Engine = (function () {
         enumerable: false,
         configurable: true
     });
+    Engine.prototype.setWalk = function (dir) {
+        this.walkDir = dir < 0 ? -1 : dir > 0 ? 1 : 0;
+    };
     Engine.prototype.press = function () {
         var e_12, _a;
         if (this.mp && this.mp.passive)
@@ -84460,7 +84469,7 @@ var Engine = (function () {
             else if (kind === "trigger") {
                 var prevX = p.x - (this_1.lastStep || 0);
                 var ow = Number(o.o.w) || 1;
-                var trigHit = o.o.touch ? overlap(box, ob) : (this_1.playDir >= 0 ? (prevX + s < o.o.x && p.x + s >= o.o.x) : (prevX > o.o.x + ow && p.x <= o.o.x + ow));
+                var trigHit = o.o.touch ? overlap(box, ob) : (this_1.lastStep >= 0 ? (prevX + s < o.o.x && p.x + s >= o.o.x) : (prevX > o.o.x + ow && p.x <= o.o.x + ow));
                 var bootHit = this_1.boot && this_1.playDir > 0 && o.o.x <= p.x + s && o.o.x + ow >= p.x;
                 var trigFresh = o.o.touch ? trigHit && !o.hit : (trigHit || bootHit);
                 var chanOk = (Number(o.o.ach) || 0) === (this_1.channel | 0);
@@ -85367,6 +85376,27 @@ var Engine = (function () {
             finally { if (e_29) throw e_29.error; }
         }
     };
+    Engine.prototype.moveX = function (p, dx) {
+        if (!dx)
+            return;
+        var s = this.size(p);
+        p.x += dx;
+        var near = this.near(p.x - 2, p.x + s + 2);
+        for (var i = 0; i < near.length; i++) {
+            var o = near[i];
+            var k = o.def && o.def.kind;
+            if (o.broken || (k !== "solid" && k !== "brick" && k !== "glass"))
+                continue;
+            if (p.x < o.x + o.w && p.x + s > o.x && p.y + .01 < o.y + o.h && p.y + s - .01 > o.y) {
+                if (dx > 0)
+                    p.x = Math.min(p.x, o.x - s);
+                else
+                    p.x = Math.max(p.x, o.x + o.w);
+            }
+        }
+        if (p.x < 0)
+            p.x = 0;
+    };
     Engine.prototype.fixed = function (h) {
         var e_30, _a, e_31, _b, e_32, _c, e_33, _d, e_34, _e, e_35, _f, e_36, _g, e_37, _h, e_38, _j, e_39, _k, e_40, _l;
         var _this = this;
@@ -85521,11 +85551,14 @@ var Engine = (function () {
             finally { if (e_37) throw e_37.error; }
         }
         var spd = __GD52__1.SPEEDS[this.speed];
-        this.lastStep = spd * h * this.playDir;
+        this.lastStep = this.platformer ? this.walkDir * spd * .62 * this.playDir * h : spd * h * this.playDir;
         try {
             for (var _0 = __values(this.players), _1 = _0.next(); !_1.done; _1 = _0.next()) {
                 var p = _1.value;
-                p.x += this.lastStep;
+                if (this.platformer)
+                    this.moveX(p, this.lastStep);
+                else
+                    p.x += this.lastStep;
                 if (p.x < 0)
                     p.x = 0;
             }
@@ -85966,6 +85999,9 @@ var DICT = {
     removeSaved: ["Rimuovi", "Remove"],
     removedSaved: ["Rimosso dai salvati.", "Removed from saved."],
     levelDeleted: ["Livello eliminato.", "Level deleted."],
+    rename: ["Rinomina", "Rename"],
+    renamePrompt: ["Nuovo nome del livello", "New level name"],
+    renamed: ["Nome del livello aggiornato.", "Level name updated."],
     playtest: ["Prova", "Playtest"],
     verify: ["Verifica", "Verify"],
     publish: ["Pubblica", "Publish"],
@@ -85996,6 +86032,8 @@ var DICT = {
     bgColor: ["Colore sfondo", "Background color"],
     groundColor: ["Colore terreno", "Ground color"],
     startMini: ["Inizia mini", "Start mini"],
+    platformer: ["Modalità platformer", "Platformer mode"],
+    platformerHint: ["← → o A/D per muoverti · Spazio/↑ per saltare · Esc pausa", "← → or A/D to move · Space/↑ to jump · Esc pause"],
     song: ["Canzone (seed)", "Song (seed)"],
     trioIcons: ["Portale trio: max icone (3–15)", "Trio portal: max icons (3–15)"],
     text: ["Testo", "Text"],
@@ -86182,6 +86220,7 @@ function GameCanvas(_a) {
     _s();
     var _d = __read((0, __GD59__1.useLang)(), 2), lang = _d[0], t = _d[1];
     var levelInfo = window.__gdLevelInfo ? window.__gdLevelInfo(level, lang) : null;
+    var isPlatformer = !!(level && level.settings && level.settings.platformer);
     var canvasRef = useRef(null);
     var barRef = useRef(null);
     var pctRef = useRef(null);
@@ -86276,6 +86315,16 @@ function GameCanvas(_a) {
                 if (!e.repeat && !pausedRef.current && finished === null)
                     eng.press();
             }
+            else if (isPlatformer && (e.code === "ArrowLeft" || e.code === "KeyA")) {
+                e.preventDefault();
+                if (!pausedRef.current && finished === null)
+                    eng.setWalk(-1);
+            }
+            else if (isPlatformer && (e.code === "ArrowRight" || e.code === "KeyD")) {
+                e.preventDefault();
+                if (!pausedRef.current && finished === null)
+                    eng.setWalk(1);
+            }
             else if (e.code === pauseK || (pauseK === "Escape" && e.code === "KeyP"))
                 togglePause();
             else if (e.code === bind("restartKey", "KeyR") && !pausedRef.current)
@@ -86286,6 +86335,8 @@ function GameCanvas(_a) {
                 eng.removeCheckpoint();
         };
         var ku = function (e) {
+            if (isPlatformer && (e.code === "ArrowLeft" || e.code === "KeyA" || e.code === "ArrowRight" || e.code === "KeyD"))
+                eng.setWalk(0);
             if (isJump(e))
                 eng.release();
         };
@@ -86319,6 +86370,7 @@ function GameCanvas(_a) {
         pausedRef.current = !pausedRef.current;
         setPaused(pausedRef.current);
         eng.release();
+        eng.setWalk(0);
         if (__GD47__1.audio.ctx)
             void (pausedRef.current ? __GD47__1.audio.ctx.suspend() : __GD47__1.audio.ctx.resume());
     }
@@ -86328,6 +86380,7 @@ function GameCanvas(_a) {
         eng.checkpoints = [];
         setCps(0);
         eng.reset();
+        eng.setWalk(0);
         setHasStart(!!eng.startPos);
         if (pausedRef.current)
             togglePause();
@@ -86355,6 +86408,17 @@ function GameCanvas(_a) {
         setHasStart(false);
         if (pausedRef.current)
             togglePause();
+    };
+    var holdWalk = function (dir) {
+        var eng = engRef.current;
+        if (!eng || pausedRef.current)
+            return;
+        __GD47__1.audio.ensure();
+        eng.setWalk(dir);
+    };
+    var stopWalk = function () {
+        if (engRef.current)
+            engRef.current.setWalk(0);
     };
     var exit = function () {
         var _a;
@@ -86489,6 +86553,7 @@ function GameCanvas(_a) {
                                 "data-testid": "game-level-meta",
                                 children: "⏱ " + levelInfo.duration + " · ♪ " + levelInfo.song
                             }, void 0, false, {}, void 0),
+                            levelInfo && levelInfo.platformer && _jsxDEV("span", { className: "rounded bg-[#00f0ff] px-2 py-0.5 font-bold text-black", "data-testid": "game-platformer-badge", children: "PLATFORMER" }, void 0, false, {}, void 0),
                             badge && _jsxDEV("span", {
                                 className: "rounded bg-[#ffe600] px-2 py-0.5 font-bold text-black",
                                 "data-testid": "game-badge",
@@ -86673,6 +86738,14 @@ function GameCanvas(_a) {
                 lineNumber: 180,
                 columnNumber: 20
             }, this),
+            isPlatformer && !paused && !done ? _jsxDEV("div", {
+                className: "pointer-events-none absolute inset-x-0 bottom-6 flex justify-between px-5",
+                "data-testid": "game-platformer-controls",
+                children: [
+                    _jsxDEV("button", { className: "pointer-events-auto flex h-16 w-16 select-none items-center justify-center rounded-full border border-white/30 bg-black/55 text-3xl text-white backdrop-blur-md transition-transform duration-150 active:scale-95", style: { touchAction: "none" }, onTouchStart: function (e) { e.preventDefault(); holdWalk(-1); }, onTouchEnd: stopWalk, onTouchCancel: stopWalk, onMouseDown: function (e) { e.preventDefault(); holdWalk(-1); }, onMouseUp: stopWalk, onMouseLeave: stopWalk, "data-testid": "game-platformer-left", "aria-label": "left", children: "◀" }, void 0, false),
+                    _jsxDEV("button", { className: "pointer-events-auto flex h-16 w-16 select-none items-center justify-center rounded-full border border-white/30 bg-black/55 text-3xl text-white backdrop-blur-md transition-transform duration-150 active:scale-95", style: { touchAction: "none" }, onTouchStart: function (e) { e.preventDefault(); holdWalk(1); }, onTouchEnd: stopWalk, onTouchCancel: stopWalk, onMouseDown: function (e) { e.preventDefault(); holdWalk(1); }, onMouseUp: stopWalk, onMouseLeave: stopWalk, "data-testid": "game-platformer-right", "aria-label": "right", children: "▶" }, void 0, false)
+                ]
+            }, void 0, true) : null,
             paused && _jsxDEV("div", {
                 className: "absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200",
                 "data-testid": "pause-menu",
@@ -86735,7 +86808,7 @@ function GameCanvas(_a) {
                             "x-dynamic": "true",
                             "x-source-type": "computed",
                             "x-source-editable": "false",
-                            children: t("controlsHint")
+                            children: t(isPlatformer ? "platformerHint" : "controlsHint")
                         }, void 0, false, {
                             fileName: _jsxFileName,
                             lineNumber: 193,
@@ -96166,6 +96239,7 @@ var emptyLevel = function () { return ({
         bg: "#2850d8",
         ground: "#1a3aa8",
         mini: false,
+        platformer: false,
         song: 0,
         trioMax: 3
     },
@@ -97121,6 +97195,7 @@ function buildMain(num) {
             bg: L.colors[0],
             ground: hex(L.colors[0], .62),
             mini: false,
+            platformer: false,
             song: num * 31 + 5,
             trioMax: 3
         },
@@ -99803,7 +99878,8 @@ function TriggerOptions(p) {
     var chk = function (k, it, en) { return __h("label", { key: k, style: UI.label }, __h("input", { type: "checkbox", checked: !!s[k], onChange: function (e) { var _a; return u((_a = {}, _a[k] = e.target.checked, _a)); }, "data-testid": "trg-" + k }), T(it, en)); };
     return __h("div", { style: { display: "grid", gap: 6, borderTop: "1px solid rgba(255,255,255,.12)", paddingTop: 8 }, "data-testid": "editor-trigger-options" }, [
         __h("label", { key: "ach", style: UI.label }, T("Canale attivo (CH)", "Active channel (CH)"), __h("input", { type: "number", min: 0, max: 9999, value: Number(s.ach) || 0, onChange: function (e) { return u({ ach: Math.max(0, Math.min(9999, Math.floor(Number(e.target.value) || 0))) }); }, style: __assign(__assign({}, UI.input), { width: 90 }), "data-testid": "trg-ach" })),
-        chk("touch", "Touch Trigger (si attiva toccandolo)", "Touch Trigger (fires on contact)"),
+        chk("touch", "Solo al tocco (non automatico)", "Only on touch (not automatic)"),
+        __h("p", { key: "touchHint", style: { fontSize: 11, color: "rgba(255,255,255,.45)", margin: 0 } }, T("Se disattivata, il trigger si attiva come sempre quando viene superato.", "If off, the trigger fires as usual when passed.")),
         chk("sp", "Spawn Trigger (attivato solo da uno Spawn)", "Spawn Trigger (only from a Spawn)"),
         chk("multi", "Multi Trigger (più attivazioni)", "Multi Trigger (multiple activations)"),
         s.t === "trigger_spawn" ? __h("button", { key: "es", type: "button", style: UI.btnOn, onClick: function () { return p.openSpecial && p.openSpecial(); }, "data-testid": "trg-edit-special" }, T("Edit Special — Spawn Group", "Edit Special — Spawn Group")) : null
@@ -99872,7 +99948,7 @@ function EditPanel(p) {
     var _b = __read(useState(null), 2), angTxt = _b[0], setAngTxt = _b[1];
     var grpList = s && Array.isArray(s.grp) ? s.grp : [];
     var g = Math.max(1, Math.min(9999, Number(gid) || 1));
-    return __h("div", { className: "gde-cards", "data-testid": "editor-edit-panel" }, !s ? __h("div", { style: __assign(__assign({}, CARD), { flex: "1 1 100%", color: "rgba(255,255,255,.7)" }) }, T("Seleziona uno o più oggetti (tocca, oppure Maiusc/Ctrl + clic, oppure ", "Select one or more objects (tap, or Shift/Ctrl + click, or "), __h("button", { type: "button", style: p.multiMode ? UI.btnOn : UI.btn, onClick: function () { return p.setMultiMode(!p.multiMode); }, "data-testid": "editor-multi-toggle" }, T("Selezione multipla", "Multi-select")), " ", __h("button", { type: "button", style: UI.btn, onClick: p.selectAll, "data-testid": "editor-select-all" }, T("Tutti", "All")), ")") : null, __h("div", { style: __assign(__assign(__assign({}, CARD), off), { flex: "1 1 230px" }), "data-testid": "editor-nudge" }, __h(CardTitle, null, T("Sposta", "Move")), __h("div", { style: __assign(__assign({}, UI.row), { marginBottom: 8 }) }, NUDGE.map(function (n) { return __h("button", { key: n.id, type: "button", style: p.step === n.id ? UI.btnOn : UI.btn, onClick: function () { return p.setStep(n.id); }, "data-testid": "nudge-step-" + n.id }, lang === "it" ? n.it : n.en); })), __h("div", { className: "gde-pad" }, __h("span"), __h(RepeatBtn, { onStep: function () { return p.nudge(0, 1); }, style: UI.padBtn, testid: "nudge-up" }, "↑"), __h("span"), __h(RepeatBtn, { onStep: function () { return p.nudge(-1, 0); }, style: UI.padBtn, testid: "nudge-left" }, "←"), __h("span", { style: __assign(__assign({ display: "flex", alignItems: "center", justifyContent: "center" }, UI.mono), { fontSize: 10 }) }, T("sposta", "move")), __h(RepeatBtn, { onStep: function () { return p.nudge(1, 0); }, style: UI.padBtn, testid: "nudge-right" }, "→"), __h("span"), __h(RepeatBtn, { onStep: function () { return p.nudge(0, -1); }, style: UI.padBtn, testid: "nudge-down" }, "↓"), __h("span"))), __h("div", { style: __assign(__assign(__assign({}, CARD), off), { flex: "1 1 240px" }), "data-testid": "editor-rotate-panel" }, __h(CardTitle, null, T("Ruota come vuoi", "Free rotation")), __h("div", { style: __assign(__assign({}, UI.row), { marginBottom: 6 }) }, __h("input", { type: "number", step: 1, value: angTxt !== null && angTxt !== void 0 ? angTxt : Math.round(ang * 100) / 100, style: __assign(__assign({}, UI.input), { width: 84 }), onFocus: function () { return setAngTxt(String(Math.round(ang * 100) / 100)); }, onBlur: function () { return setAngTxt(null); }, onChange: function (e) { setAngTxt(e.target.value); var v = Number(e.target.value); if (e.target.value !== "" && Number.isFinite(v))
+    return __h("div", { className: "gde-cards", "data-testid": "editor-edit-panel" }, !s ? __h("div", { style: __assign(__assign({}, CARD), { flex: "1 1 100%", color: "rgba(255,255,255,.7)" }) }, T("Seleziona uno o più oggetti (tocca, oppure Maiusc/Ctrl + clic, oppure ", "Select one or more objects (tap, or Shift/Ctrl + click, or "), __h("button", { type: "button", style: p.multiMode ? UI.btnOn : UI.btn, onClick: function () { return p.setMultiMode(!p.multiMode); }, "data-testid": "editor-multi-toggle" }, T("Selezione multipla", "Multi-select")), " ", __h("button", { type: "button", style: UI.btn, onClick: p.selectAll, "data-testid": "editor-select-all" }, T("Tutti", "All")), ")") : null, s && __GD52__1.DEF[s.t] && __GD52__1.DEF[s.t].kind === "trigger" ? __h("div", { style: __assign(__assign({}, CARD), { flex: "1 1 100%" }), "data-testid": "editor-trigger-edit-options" }, __h("label", { style: UI.label }, __h("input", { type: "checkbox", checked: !!s.touch, onChange: function (e) { return p.updateSel({ touch: e.target.checked }); }, "data-testid": "editor-trigger-edit-touch" }), T("Solo al tocco (non automatico)", "Only on touch (not automatic)")), __h("p", { style: { fontSize: 11, color: "rgba(255,255,255,.45)", margin: 0 } }, T("Se disattivato, il trigger funziona come sempre.", "If off, the trigger works as usual."))) : null, __h("div", { style: __assign(__assign(__assign({}, CARD), off), { flex: "1 1 230px" }), "data-testid": "editor-nudge" }, __h(CardTitle, null, T("Sposta", "Move")), __h("div", { style: __assign(__assign({}, UI.row), { marginBottom: 8 }) }, NUDGE.map(function (n) { return __h("button", { key: n.id, type: "button", style: p.step === n.id ? UI.btnOn : UI.btn, onClick: function () { return p.setStep(n.id); }, "data-testid": "nudge-step-" + n.id }, lang === "it" ? n.it : n.en); })), __h("div", { className: "gde-pad" }, __h("span"), __h(RepeatBtn, { onStep: function () { return p.nudge(0, 1); }, style: UI.padBtn, testid: "nudge-up" }, "↑"), __h("span"), __h(RepeatBtn, { onStep: function () { return p.nudge(-1, 0); }, style: UI.padBtn, testid: "nudge-left" }, "←"), __h("span", { style: __assign(__assign({ display: "flex", alignItems: "center", justifyContent: "center" }, UI.mono), { fontSize: 10 }) }, T("sposta", "move")), __h(RepeatBtn, { onStep: function () { return p.nudge(1, 0); }, style: UI.padBtn, testid: "nudge-right" }, "→"), __h("span"), __h(RepeatBtn, { onStep: function () { return p.nudge(0, -1); }, style: UI.padBtn, testid: "nudge-down" }, "↓"), __h("span"))), __h("div", { style: __assign(__assign(__assign({}, CARD), off), { flex: "1 1 240px" }), "data-testid": "editor-rotate-panel" }, __h(CardTitle, null, T("Ruota come vuoi", "Free rotation")), __h("div", { style: __assign(__assign({}, UI.row), { marginBottom: 6 }) }, __h("input", { type: "number", step: 1, value: angTxt !== null && angTxt !== void 0 ? angTxt : Math.round(ang * 100) / 100, style: __assign(__assign({}, UI.input), { width: 84 }), onFocus: function () { return setAngTxt(String(Math.round(ang * 100) / 100)); }, onBlur: function () { return setAngTxt(null); }, onChange: function (e) { setAngTxt(e.target.value); var v = Number(e.target.value); if (e.target.value !== "" && Number.isFinite(v))
             p.setAngleAbs(v, true); }, "data-testid": "rot-input" }), __h("span", null, "°")), __h("input", { type: "range", min: -180, max: 180, step: 1, value: Math.round(ang), style: { width: "100%" }, onPointerDown: p.pushHist, onChange: function (e) { return p.setAngleAbs(Number(e.target.value), false); }, "data-testid": "rot-slider" }), __h("div", { style: __assign(__assign({}, UI.row), { marginTop: 6 }) }, [[-90, "−90°"], [-15, "−15°"], [-1, "−1°"], [1, "+1°"], [15, "+15°"], [90, "+90°"]].map(function (_a) {
         var _b = __read(_a, 2), d = _b[0], l = _b[1];
         return __h("button", { key: l, type: "button", style: UI.btn, onClick: function () { return p.rotBy(d); }, "data-testid": "rot-by-" + d }, l);
@@ -101776,6 +101852,7 @@ function Editor() {
                                             lineNumber: 640,
                                             columnNumber: 15
                                         }, this),
+                                        __h("label", { key: "platformer", className: "flex items-center gap-2", "data-testid": "editor-settings-platformer-label" }, __h("input", { type: "checkbox", checked: !!data.settings.platformer, onChange: function (e) { return setSettings({ platformer: e.target.checked }); }, className: "accent-[#00ff66]", "data-testid": "editor-settings-platformer" }), t("platformer")),
                                         _jsxDEV("label", {
                                             className: "grid gap-1",
                                             "x-file-name": "Editor",
@@ -105361,6 +105438,7 @@ var __GD57__1 = require("57");
 var __GD59__1 = require("59");
 var __GD40__1 = __importDefault(require("40"));
 var __GD41__1 = __importDefault(require("41"));
+var __GD37__1 = __importDefault(require("37"));
 var __GD16__2 = require("16");
 var __GD62__1 = require("62");
 var __GD63__1 = require("63");
@@ -105412,6 +105490,15 @@ function Online() {
             __GD63__1.queryClient.invalidateQueries({ queryKey: ["mine"] });
             (0, __GD23__1.toast)(t("levelDeleted"));
         }
+    });
+    var renameLevel = (0, __GD6__1.useMutation)({
+        mutationFn: function (x) { return (0, __GD57__1.apiPut)("/levels/".concat(x.id), { name: x.name }); },
+        onSuccess: function () {
+            __GD63__1.queryClient.invalidateQueries({ queryKey: ["online"] });
+            __GD63__1.queryClient.invalidateQueries({ queryKey: ["mine"] });
+            __GD23__1.toast.success(t("renamed"));
+        },
+        onError: function () { return __GD23__1.toast.error(t("error")); }
     });
     return _jsxDEV("div", {
         className: "relative min-h-screen gd-grid-bg",
@@ -105858,6 +105945,22 @@ function Online() {
                                         lineNumber: 67,
                                         columnNumber: 14
                                     }, _this),
+                                    me.data && me.data.user_id === l.user_id && _jsxDEV("button", {
+                                        onClick: function () {
+                                            var n = window.prompt(t("renamePrompt"), l.name);
+                                            n = n && n.trim();
+                                            if (n && n !== l.name)
+                                                renameLevel.mutate({ id: l.id, name: n });
+                                        },
+                                        className: "rounded-xl border border-white/20 bg-black/30 px-3 py-2 font-mono text-sm text-white/70 transition-transform duration-150 active:scale-90",
+                                        "data-testid": "online-level-rename-button",
+                                        title: t("rename"),
+                                        children: t("rename")
+                                    }, "rename-".concat(l.id), false, {
+                                        fileName: _jsxFileName,
+                                        lineNumber: 67,
+                                        columnNumber: 14
+                                    }, _this),
                                     _jsxDEV(__GD16__1.Link, {
                                         to: "/play/online/".concat(l.id),
                                         className: "gd-btn bg-[#00ff66] py-2 text-[#051108]",
@@ -105879,7 +105982,13 @@ function Online() {
                                         fileName: _jsxFileName,
                                         lineNumber: 68,
                                         columnNumber: 15
-                                    }, _this)
+                                    }, _this),
+                                    l.difficulty && __GD37__1.DIFF_LABEL[l.difficulty] && _jsxDEV("div", {
+                                        className: "ml-auto shrink-0",
+                                        title: l.difficulty,
+                                        "data-testid": "online-level-face",
+                                        children: _jsxDEV(__GD37__1.default, { d: l.difficulty, size: 44 }, void 0, false)
+                                    }, void 0, false)
                                 ]
                             }, l.id, true, {
                                 fileName: _jsxFileName,
