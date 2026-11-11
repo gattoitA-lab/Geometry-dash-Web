@@ -29,6 +29,25 @@ restano temporanee, ma host e amico possono entrare nella stessa lobby anche se 
 istanze diverse del Worker. Nella pagina Livelli online puoi eliminare i livelli che hai pubblicato e usare
 la categoria Salvati per ritrovare i livelli che hai provato, con la possibilità di rimuoverli dai salvati.
 
+## Compatibilità
+
+Supporto best-effort, senza pretese di resa identica su hardware molto vecchio:
+
+| Piattaforma | Supporto |
+| --- | --- |
+| iOS 9.3+ (Safari 9.1+) | sì, con polyfill |
+| Android 5+ con Chrome/WebView aggiornato | sì, con polyfill |
+| Windows XP con Chrome 49 o Firefox 52 ESR | sì, con polyfill |
+| macOS con Safari 9.1+ o Chrome 49+ | sì, con polyfill |
+| Versioni attuali di iOS, Android, Windows e macOS | sì |
+| PS3 e Xbox 360 | no: browser non aggiornabile, serve un port nativo o streaming |
+| Browser senza Canvas 2D, Promise o XMLHttpRequest | no |
+
+Il gioco usa Canvas 2D, Web Audio e richieste XHR; il bundle JavaScript è già in sintassi ES5. Il polyfill
+aggiunge `fetch`, `Object.assign`, `Array.from` e altre API mancanti sui browser più vecchi. Restano possibili
+differenze grafiche su Safari 9, Android 5 con WebView molto vecchia e Chrome 49. La compatibilità è stata
+verificata solo su browser moderni e su un test con `fetch` disattivato, non su dispositivi fisici datati.
+
 ## In locale
 
 ```bash

@@ -385,6 +385,24 @@
 <meta name="description" content="Geometry Dash nel browser: 30 livelli + 2 demon, 8 modalità, portali, orb, pad, icon kit e level editor con livelli online.">
 <title>Geometry Dash Web — Livelli, Icon Kit &amp; Editor</title>
 <style>html,body{margin:0;min-height:100%;background:#0b0e14;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}canvas{-ms-touch-action:none;touch-action:none}button{-webkit-tap-highlight-color:transparent}</style>
+<style id="gd-legacy-css">
+/* Fallback per browser precedenti a Chrome 49/Safari 9.1. */
+@supports not (inset: 0px) {
+  .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+  .inset-x-0 { right: 0; left: 0; }
+  .inset-y-0 { top: 0; bottom: 0; }
+  .inset-1 { top: .25rem; right: .25rem; bottom: .25rem; left: .25rem; }
+  .inset-2 { top: .5rem; right: .5rem; bottom: .5rem; left: .5rem; }
+}
+@supports not (height: 100dvh) {
+  .h-dvh { height: 100vh; }
+  .min-h-dvh { min-height: 100vh; }
+  [class*="dvh"] { min-height: 100vh; }
+}
+@supports not (aspect-ratio: 1 / 1) {
+  .aspect-square { height: 0; padding-bottom: 100%; }
+}
+</style>
 </head>
 <body>
 <div id="root"></div>
@@ -393,6 +411,7 @@
 (function (g) {
   "use strict";
   var doc = g.document;
+  if (!g.console) g.console = { log: function () {}, warn: function () {}, error: function () {} };
 
   // ---------- diagnostica: mostra gli errori a schermo (utile su iOS dove non c'e' console) ----------
   var bootDone = false;
@@ -445,6 +464,19 @@
   def(Object, "fromEntries", function (it) { var o = {}; var arr = Array.from(it); for (var i = 0; i < arr.length; i++) o[arr[i][0]] = arr[i][1]; return o; });
   def(Object, "hasOwn", function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); });
   def(Object, "getOwnPropertyDescriptors", function (o) { var r = {}; Object.getOwnPropertyNames(o).forEach(function (k) { r[k] = Object.getOwnPropertyDescriptor(o, k); }); return r; });
+  def(Object, "assign", function (target) {
+    if (target == null) throw new TypeError("Cannot convert undefined or null to object");
+    var to = Object(target);
+    for (var i = 1; i < arguments.length; i++) {
+      var src = arguments[i];
+      if (src == null) continue;
+      var keys = Object.keys(Object(src));
+      for (var j = 0; j < keys.length; j++) to[keys[j]] = src[keys[j]];
+    }
+    return to;
+  });
+  def(Object, "is", function (a, b) { return a === b ? a !== 0 || 1 / a === 1 / b : a !== a && b !== b; });
+  if (!Object.setPrototypeOf) Object.setPrototypeOf = function (o, p) { o.__proto__ = p; return o; };
 
   // ---------- Reflect (Safari < 10) ----------
   if (typeof g.Reflect === "undefined") {
@@ -468,6 +500,27 @@
   if (typeof g.FinalizationRegistry === "undefined") { g.FinalizationRegistry = function () {}; g.FinalizationRegistry.prototype.register = function () {}; g.FinalizationRegistry.prototype.unregister = function () {}; }
 
   // ---------- Array / String / Number ----------
+  def(Array, "from", function (it, fn, thisArg) {
+    if (it == null) throw new TypeError("Array.from requires an array-like or iterable object");
+    var out = [], i, v;
+    if (typeof it === "string" || typeof it.length === "number") {
+      for (i = 0; i < it.length; i++) { v = it[i]; out.push(fn ? fn.call(thisArg, v, i) : v); }
+      return out;
+    }
+    if (typeof Symbol !== "undefined" && it[Symbol.iterator]) {
+      var iter = it[Symbol.iterator](), step;
+      i = 0;
+      while (!(step = iter.next()).done) { v = step.value; out.push(fn ? fn.call(thisArg, v, i) : v); i++; }
+      return out;
+    }
+    var keys = Object.keys(it);
+    for (i = 0; i < keys.length; i++) { v = it[keys[i]]; out.push(fn ? fn.call(thisArg, v, keys[i]) : v); }
+    return out;
+  });
+  def(Array, "of", function () { return Array.prototype.slice.call(arguments); });
+  def(Array.prototype, "find", function (fn, t) { for (var i = 0; i < this.length; i++) { if (fn.call(t, this[i], i, this)) return this[i]; } return undefined; });
+  def(Array.prototype, "findIndex", function (fn, t) { for (var i = 0; i < this.length; i++) { if (fn.call(t, this[i], i, this)) return i; } return -1; });
+  def(Array.prototype, "fill", function (v, start, end) { var n = this.length >>> 0, s = start | 0, e = end === undefined ? n : end | 0; if (s < 0) s = Math.max(0, n + s); if (e < 0) e = Math.max(0, n + e); for (; s < e && s < n; s++) this[s] = v; return this; });
   def(Array.prototype, "includes", function (x, from) { var o = Object(this), n = o.length >>> 0, i = from | 0; if (i < 0) i = Math.max(0, n + i); for (; i < n; i++) { if (o[i] === x || (x !== x && o[i] !== o[i])) return true; } return false; });
   def(Array.prototype, "flat", function (d) { d = d === undefined ? 1 : d; var out = []; (function f(a, depth) { for (var i = 0; i < a.length; i++) { if (Array.isArray(a[i]) && depth > 0) f(a[i], depth - 1); else out.push(a[i]); } })(this, d); return out; });
   def(Array.prototype, "flatMap", function (fn, t) { return Array.prototype.map.call(this, fn, t).flat(1); });
@@ -480,6 +533,17 @@
   def(String.prototype, "trimEnd", function () { return String(this).replace(/\s+$/, ""); });
   def(String.prototype, "at", function (i) { i = Math.trunc(i) || 0; if (i < 0) i += this.length; return i < 0 || i >= this.length ? undefined : String(this).charAt(i); });
   def(String.prototype, "replaceAll", function (a, b) { if (a instanceof RegExp) return String(this).replace(a, b); return String(this).split(String(a)).join(typeof b === "function" ? b(a) : String(b).replace(/\$&/g, a)); });
+  def(String.prototype, "startsWith", function (search, pos) { var s = String(this), n = pos | 0; n = Math.max(0, Math.min(n, s.length)); return s.slice(n, n + String(search).length) === String(search); });
+  def(String.prototype, "endsWith", function (search, pos) { var s = String(this), q = String(search), n = pos === undefined ? s.length : Math.min(pos | 0, s.length); return s.slice(n - q.length, n) === q; });
+  def(String.prototype, "includes", function (search, pos) { return String(this).indexOf(String(search), pos | 0) !== -1; });
+  def(String.prototype, "repeat", function (n) { n = Number(n); if (n < 0 || n === Infinity) throw new RangeError("Invalid count value"); var s = "", x = String(this); while (n > 0) { if (n & 1) s += x; n >>= 1; if (n) x += x; } return s; });
+  def(Number, "isNaN", function (v) { return typeof v === "number" && v !== v; });
+  def(Number, "isFinite", function (v) { return typeof v === "number" && isFinite(v); });
+  def(Number, "isInteger", function (v) { return typeof v === "number" && isFinite(v) && Math.floor(v) === v; });
+  def(Number, "parseInt", function (v, r) { return g.parseInt(v, r); });
+  def(Number, "parseFloat", function (v) { return g.parseFloat(v); });
+  def(Math, "trunc", function (v) { v = Number(v); return v < 0 ? Math.ceil(v) : Math.floor(v); });
+  def(Math, "sign", function (v) { v = Number(v); return v === 0 || v !== v ? v : v > 0 ? 1 : -1; });
 
   // ---------- Promise ----------
   if (typeof Promise !== "undefined") {
@@ -752,7 +816,51 @@
     g.Response.prototype.json = function () { var b = this._b; return new Promise(function (res, rej) { try { res(JSON.parse(b === null ? "" : String(b))); } catch (e) { rej(e); } }); };
     g.Response.prototype.clone = function () { return new g.Response(this._b, { status: this.status, headers: this.headers._m }); };
   }
-  if (typeof g.fetch === "undefined") g.fetch = function () { return Promise.reject(new TypeError("fetch non disponibile")); };
+  if (typeof g.fetch === "undefined") {
+    g.fetch = function (input, init) {
+      return new Promise(function (resolve, reject) {
+        if (!g.XMLHttpRequest) { reject(new TypeError("fetch non disponibile")); return; }
+        init = init || {};
+        var req = input && typeof input === "object" ? input : null;
+        var url = req && req.url ? req.url : String(input);
+        var method = String(init.method || (req && req.method) || "GET").toUpperCase();
+        var xhr;
+        try { xhr = new g.XMLHttpRequest(); xhr.open(method, url, true); } catch (e) { reject(e); return; }
+        var headers = init.headers || (req && req.headers);
+        function header(k, v) { try { xhr.setRequestHeader(String(k), String(v)); } catch (e) { /* header non consentito */ } }
+        if (headers) {
+          if (typeof headers.forEach === "function") headers.forEach(function (v, k) { header(k, v); });
+          else for (var hk in headers) if (Object.prototype.hasOwnProperty.call(headers, hk)) header(hk, headers[hk]);
+        }
+        if (init.credentials === "include") xhr.withCredentials = true;
+        var signal = init.signal || (req && req.signal), aborted = false;
+        var cleanup = function () { if (signal && signal.removeEventListener) signal.removeEventListener("abort", onAbort); };
+        var onAbort = function () { aborted = true; try { xhr.abort(); } catch (e) {} reject(new Error("Aborted")); cleanup(); };
+        if (signal) {
+          if (signal.aborted) { onAbort(); return; }
+          if (signal.addEventListener) signal.addEventListener("abort", onAbort);
+        }
+        xhr.onload = function () {
+          cleanup();
+          if (aborted) return;
+          var hs = {}, raw = "";
+          try { raw = xhr.getAllResponseHeaders() || ""; } catch (e) {}
+          raw.trim().split(/\r?\n/).forEach(function (line) {
+            var i = line.indexOf(":");
+            if (i > 0) hs[line.slice(0, i).trim().toLowerCase()] = line.slice(i + 1).trim();
+          });
+          var status = xhr.status === 0 ? 200 : xhr.status;
+          var res;
+          try { res = new g.Response(xhr.responseText == null ? "" : xhr.responseText, { status: status, statusText: xhr.statusText || "", headers: hs }); } catch (e) { reject(e); return; }
+          try { res.url = url; } catch (e) {}
+          resolve(res);
+        };
+        xhr.onerror = function () { cleanup(); if (!aborted) reject(new TypeError("Network request failed")); };
+        xhr.ontimeout = function () { cleanup(); if (!aborted) reject(new TypeError("Network request timed out")); };
+        try { xhr.send(init.body == null ? null : init.body); } catch (e) { cleanup(); reject(e); }
+      });
+    };
+  }
 
   // ---------- localStorage / sessionStorage (iframe sandbox o modalita' privata lanciano eccezioni) ----------
   ["localStorage", "sessionStorage"].forEach(function (name) {
