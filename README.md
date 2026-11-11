@@ -55,7 +55,8 @@ Su Safari 9 una funzione dichiarata dentro un blocco in modalità strict provoca
 `SyntaxError: Strict mode does not allow function declarations in a lexically nested statement`.
 La dichiarazione compatibile è stata convertita in una function expression ES5, senza cambiare il flusso
 del gioco sui browser moderni. Un piccolo polyfill ES5 fornisce inoltre `TextEncoder` e `TextDecoder`
-solo ai browser che non li hanno.
+solo ai browser che non li hanno. Safari 9 non ha `Proxy`: in quel caso il tracking opzionale di React Query
+viene disattivato e viene restituito direttamente il risultato.
 
 La compatibilità è stata verificata solo su browser moderni e su un test con `fetch` disattivato, non su
 dispositivi fisici datati.

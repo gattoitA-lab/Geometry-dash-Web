@@ -4522,6 +4522,7 @@ var QueryObserver = (_f = (function (_super) {
         };
         class_7.prototype.trackResult = function (result, onPropTracked) {
             var _this = this;
+            if (typeof Proxy !== "function") return result;
             return new Proxy(result, { get: function (target, key) {
                     _this.trackProp(key);
                     onPropTracked === null || onPropTracked === void 0 ? void 0 : onPropTracked(key);
