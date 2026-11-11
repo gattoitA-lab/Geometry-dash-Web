@@ -30776,7 +30776,7 @@ function createClientRoutes(manifest, routeModulesCache, initialState, ssr, isSp
                     return fetchServerAction(singleFetch);
                 }); };
             var lazyRoutePromise_1;
-            function getLazyRoute() {
+            var getLazyRoute = function getLazyRoute() {
                 return __awaiter(this, void 0, void 0, function () {
                     var _this = this;
                     return __generator(this, function (_a) {
@@ -30809,7 +30809,7 @@ function createClientRoutes(manifest, routeModulesCache, initialState, ssr, isSp
                         }
                     });
                 });
-            }
+            };
             dataRoute.lazy = {
                 loader: route.hasClientLoader ? function () { return __awaiter(_this, void 0, void 0, function () {
                     var clientLoader, _a;

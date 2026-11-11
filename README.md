@@ -51,6 +51,11 @@ Su Safari 12 `performance.measure()` non accetta i timestamp numerici usati da R
 `SyntaxError: The string did not match the expected pattern`. La pagina installa uno shim prima del bundle:
 le misure valide passano, quelle rifiutate da Safari vengono ignorate senza interrompere il gioco.
 
+Su Safari 9 una funzione dichiarata dentro un blocco in modalità strict provocava
+`SyntaxError: Strict mode does not allow function declarations in a lexically nested statement`.
+La dichiarazione compatibile è stata convertita in una function expression ES5, senza cambiare il flusso
+del gioco sui browser moderni.
+
 La compatibilità è stata verificata solo su browser moderni e su un test con `fetch` disattivato, non su
 dispositivi fisici datati.
 
