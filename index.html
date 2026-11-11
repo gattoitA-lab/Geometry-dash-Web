@@ -104449,7 +104449,9 @@ var __GD60__1 = require("60");
 var __GD18__1 = __importDefault(require("18"));
 var RefreshRuntime = __importStar(require("0"));
 __importMeta.hot = (0, __GD1__1.createHotContext)("/src/pages/Login.tsx");
+var __GD62__1 = require("62");
 var useState = __GD17__1.default["useState"];
+var useEffect = __GD17__1.default["useEffect"];
 var _jsxDEV = __GD18__1.default["jsxDEV"];
 var _jsxFileName = "/app/frontend/src/pages/Login.tsx";
 var _s = $RefreshSig$();
@@ -104458,6 +104460,11 @@ function Login() {
     _s();
     var _a = __read((0, __GD59__1.useLang)(), 2), t = _a[1];
     var nav = (0, __GD16__1.useNavigate)();
+    var me = (0, __GD62__1.useMe)();
+    useEffect(function () {
+        if (me.data)
+            nav("/", { replace: true });
+    }, [me.data, nav]);
     var _b = __read(useState("login"), 2), tab = _b[0], setTab = _b[1];
     var _d = __read(useState(""), 2), username = _d[0], setUsername = _d[1];
     var _e = __read(useState(""), 2), password = _e[0], setPassword = _e[1];
