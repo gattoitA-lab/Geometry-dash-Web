@@ -24,7 +24,9 @@ livelli online e lobby.
 
 Il Worker online si rigenera con `node online/build.js`; il manifest da pubblicare è
 `online/dist/manifest.json`. Account, livelli, progressi e Mi piace sono salvati nell'archivio R2 del sito,
-quindi sopravvivono ai riavvii. Le lobby restano temporanee, come nel server Node.
+quindi sopravvivono ai riavvii. Anche le lobby sono condivise tra le istanze del Worker tramite R2:
+restano temporanee, ma host e amico possono entrare nella stessa lobby anche se le richieste arrivano a
+istanze diverse del Worker.
 
 ## In locale
 

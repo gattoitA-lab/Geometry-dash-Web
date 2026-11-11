@@ -377,7 +377,7 @@ function lobbyRoute(method, path, b, u) {
   m = /^\/lobbies\/([A-Za-z0-9]+)(?:\/(\w+))?$/.exec(path);
   if (!m) return null;
   L = lobbies[m[1].toUpperCase()];
-  if (!L) return E(404, "Lobby non trovata (controlla il codice)");
+  if (!L) return E(404, "Lobby non trovata (controlla il codice e che entrambi usiate lo stesso server)");
   var act = m[2];
   if (!act && method === "GET") { if (L.players[u.user_id]) L.players[u.user_id].seen = now(); return J(200, lobbyView(L, u.user_id)); }
   if (act === "join" && method === "POST") {
