@@ -45,8 +45,14 @@ Supporto best-effort, senza pretese di resa identica su hardware molto vecchio:
 
 Il gioco usa Canvas 2D, Web Audio e richieste XHR; il bundle JavaScript è già in sintassi ES5. Il polyfill
 aggiunge `fetch`, `Object.assign`, `Array.from` e altre API mancanti sui browser più vecchi. Restano possibili
-differenze grafiche su Safari 9, Android 5 con WebView molto vecchia e Chrome 49. La compatibilità è stata
-verificata solo su browser moderni e su un test con `fetch` disattivato, non su dispositivi fisici datati.
+differenze grafiche su Safari 9, Android 5 con WebView molto vecchia e Chrome 49.
+
+Su Safari 12 `performance.measure()` non accetta i timestamp numerici usati da React e lancia
+`SyntaxError: The string did not match the expected pattern`. La pagina installa uno shim prima del bundle:
+le misure valide passano, quelle rifiutate da Safari vengono ignorate senza interrompere il gioco.
+
+La compatibilità è stata verificata solo su browser moderni e su un test con `fetch` disattivato, non su
+dispositivi fisici datati.
 
 ## In locale
 

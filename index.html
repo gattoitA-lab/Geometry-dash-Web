@@ -3,6 +3,27 @@
 <head>
 <script>window.GD_SERVER = "https://site-627b3cbd99aa4039876e170b0edf8f3f.freebuff.page";</script>
 <script>
+/* Safari 12: performance.measure() rifiuta i timestamp numerici usati da React. */
+(function () {
+  "use strict";
+  var perf = window.performance;
+  if (!perf || typeof perf.measure !== "function") return;
+  var nativeMeasure = perf.measure;
+  var safeMeasure = function () {
+    try {
+      return nativeMeasure.apply(perf, arguments);
+    } catch (e) {
+      try { return nativeMeasure.call(perf, arguments[0]); } catch (e2) { return undefined; }
+    }
+  };
+  try { perf.measure = safeMeasure; }
+  catch (e3) {
+    try { Object.defineProperty(perf, "measure", { value: safeMeasure, configurable: true, writable: true }); }
+    catch (e4) {}
+  }
+})();
+</script>
+<script>
 (function () {
   "use strict";
   /* Qualita' automatica: misura gli fps reali e regola risoluzione ed effetti.
