@@ -1,7 +1,7 @@
 /* Geometry Dash Web - nucleo del backend (usato dal browser in modalita' locale e dal server condiviso) */
 function GDCore(env) {
   "use strict";
-  function emptyDb() { return { users: {}, session: null, progress: {}, levels: [], likes: {}, saves: {} }; }
+  function emptyDb() { return { users: {}, session: null, progress: {}, levels: [], likes: {}, saves: {}, audio: {} }; }
   var db;
   db = env.load() || emptyDb();
   var base = emptyDb(); Object.keys(base).forEach(function (k) { if (db[k] === undefined) db[k] = base[k]; });
@@ -115,6 +115,24 @@ function GDCore(env) {
     if (!init || init.body == null || typeof init.body !== "string") return {};
     try { return JSON.parse(init.body); } catch (e) { return {}; }
   }
+  function audioType(name) {
+    var ext = String(name || "").toLowerCase().replace(/^.*\./, "");
+    if (ext === "mp3" || ext === "mpeg") return "audio/mpeg";
+    if (ext === "m4a" || ext === "mp4") return "audio/mp4";
+    if (ext === "aac") return "audio/aac";
+    if (ext === "wav") return "audio/wav";
+    if (ext === "ogg" || ext === "oga") return "audio/ogg";
+    if (ext === "webm") return "audio/webm";
+    if (ext === "flac") return "audio/flac";
+    return "application/octet-stream";
+  }
+  function audioBytes(data) {
+    var clean = String(data || "").replace(/^data:[^,]*;base64,/, "").replace(/\s+/g, "");
+    if (!clean) throw new Error("missing");
+    var bin = atob(clean), out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
 
   async function route(method, path, query, init) {
     var u = me(), b, m, l;
@@ -122,6 +140,42 @@ function GDCore(env) {
     /* auth */
     if (path === "/auth/me" && method === "GET") return u ? json(200, pubUser(u)) : err(401, "Not authenticated");
     if (path === "/auth/logout" && method === "POST") { env.setSession(null); save(); return json(200, { ok: true }); }
+
+    /* audio condiviso: il file viene caricato dal creatore e scaricato da chi prova il livello */
+    if (path === "/audio" && method === "POST") {
+      if (!u) return err(401, "Accedi per condividere la musica");
+      if (!env.putAudio || !env.getAudio) return err(501, "Archivio audio non disponibile");
+      b = body(init);
+      var maxAudio = 16 * 1024 * 1024;
+      var b64 = String(b.data || "").replace(/^data:[^,]*;base64,/, "").replace(/\s+/g, "");
+      if (!b64) return err(422, "File audio mancante");
+      if (b64.length > Math.ceil(maxAudio * 4 / 3) + 8) return err(413, "File troppo grande (max 16 MB)");
+      var bytes;
+      try { bytes = audioBytes(b64); } catch (e) { return err(422, "File audio non valido"); }
+      if (!bytes.length || bytes.length > maxAudio) return err(413, "File troppo grande (max 16 MB)");
+      var type = String(b.type || "").toLowerCase().slice(0, 80);
+      if (!/^audio\/[a-z0-9.+-]+$/.test(type)) type = audioType(b.name);
+      if (!/^audio\/[a-z0-9.+-]+$/.test(type)) return err(422, "Formato audio non valido");
+      var audioName = String(b.name || "audio").replace(/[\r\n\t]/g, " ").slice(0, 80);
+      var aid = "a_" + rid();
+      db.audio[aid] = { name: audioName, type: type, size: bytes.length, user_id: u.user_id, created_at: new Date().toISOString() };
+      try { await env.putAudio(aid, bytes, type); }
+      catch (e) { delete db.audio[aid]; save(); return err(500, "Salvataggio audio non riuscito"); }
+      save();
+      return json(200, { id: aid, url: "/api/audio/" + aid, name: audioName, type: type, size: bytes.length });
+    }
+    if ((m = /^\/audio\/([A-Za-z0-9_-]{6,64})$/.exec(path)) && method === "GET") {
+      if (!env.getAudio) return err(404, "Audio non trovato");
+      var stored = await env.getAudio(m[1]);
+      if (!stored) return err(404, "Audio non trovato");
+      var am = db.audio[m[1]] || {};
+      var abody = stored.body !== undefined ? stored.body : stored;
+      return new Response(abody, { status: 200, headers: {
+        "Content-Type": stored.type || am.type || "application/octet-stream",
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "X-Content-Type-Options": "nosniff"
+      } });
+    }
     if (path === "/auth/google") return err(400, "Accesso con Google non disponibile in questa versione");
     if ((path === "/auth/register" || path === "/auth/login") && method === "POST") {
       b = body(init);
@@ -327,6 +381,15 @@ function makeCore() {
     save: function (db) { store = db; dirty = true; },
     session: function () { return curUser; },
     setSession: function (id) { curUser = id; },
+    putAudio: function (id, bytes) {
+      var dir = path.join(__dirname, "gd-audio");
+      fs.mkdirSync(dir, { recursive: true });
+      return fs.promises.writeFile(path.join(dir, id), Buffer.from(bytes));
+    },
+    getAudio: function (id) {
+      try { return { body: fs.readFileSync(path.join(__dirname, "gd-audio", id)), type: store.audio && store.audio[id] && store.audio[id].type }; }
+      catch (e) { return null; }
+    },
     authBody: function (u) {
       var t = crypto.randomBytes(24).toString("hex");
       store.tokens = store.tokens || {};
@@ -486,6 +549,7 @@ function serveStatic(req, res, p) {
   var file = path.resolve(ROOT, rel);
   if (file !== ROOT && file.indexOf(ROOT + path.sep) !== 0) return notFound(res);
   if (NO_SERVE[path.basename(file)]) return notFound(res);
+  if (rel.split(/[\\/]/)[0] === "gd-audio") return notFound(res);
   var st;
   try { st = fs.statSync(file); } catch (e) { return notFound(res); }
   if (!st.isFile()) return notFound(res);
@@ -526,9 +590,11 @@ http.createServer(function (req, res) {
     var url = new URL(req.url, "http://x");
     var path = url.pathname.replace(/\/+$/, "") || "/";
     function out(r) {
-      return r.text().then(function (t) {
+      return r.arrayBuffer().then(function (buf) {
         var h = Object.assign({}, CORS, { "Content-Type": r.headers.get("content-type") || "application/json" });
-        res.writeHead(r.status, h); res.end(t);
+        var cc = r.headers.get("cache-control"); if (cc) h["Cache-Control"] = cc;
+        h["Content-Length"] = buf.byteLength;
+        res.writeHead(r.status, h); res.end(Buffer.from(buf));
       });
     }
     if (path === "/ping" || path === "/api") { res.writeHead(200, Object.assign({}, CORS, { "Content-Type": "application/json" })); return res.end(JSON.stringify({ ok: true, name: "geometry-dash-server", storage: storageMode, users: Object.keys(store.users || {}).length, levels: (store.levels || []).length })); }

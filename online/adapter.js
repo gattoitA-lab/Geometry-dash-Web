@@ -436,6 +436,16 @@ const worker = {
           persist(env, ctx);
         },
         session: function () { return uid; },
+        putAudio: async function (id, bytes, type) {
+          if (!env.FILES) throw new Error("R2 non disponibile");
+          await env.FILES.put("audio/" + id, bytes, { httpMetadata: { contentType: type, cacheControl: "public, max-age=31536000, immutable" } });
+        },
+        getAudio: async function (id) {
+          if (!env.FILES) return null;
+          var obj = await env.FILES.get("audio/" + id);
+          if (!obj) return null;
+          return { body: obj.body, type: obj.httpMetadata && obj.httpMetadata.contentType };
+        },
         setSession: function (id) {
           if (!id && token && state.tokens) {
             delete state.tokens[token];

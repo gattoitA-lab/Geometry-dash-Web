@@ -8,4 +8,5 @@ Thumbs.db
 # dati salvati dal server condiviso (account, livelli, progressi)
 gd-data.json
 gd-data.json.tmp
+gd-audio/
 online/dist/
