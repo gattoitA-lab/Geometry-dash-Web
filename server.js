@@ -45,7 +45,7 @@ function GDCore(env) {
   function pubUser(u) { return { user_id: u.user_id, username: u.username }; }
 
   /* ---- progresso (stessa logica del salvataggio ospite) ---- */
-  function defaultIcons() { return { cube: 1, ship: 1, ball: 1, ufo: 1, wave: 1, robot: 1, spider: 1, swing: 1, color1: 0, color2: 3, glow: false }; }
+  function defaultIcons() { return { cube: 1, ship: 1, ball: 1, ufo: 1, wave: 1, robot: 1, spider: 1, swing: 1, boat: 1, color1: 0, color2: 3, glow: false }; }
   function progOf(u) {
     var p = db.progress[u.user_id];
     if (!p) p = db.progress[u.user_id] = { levels: {}, icons: defaultIcons(), online_completed: [] };
@@ -127,7 +127,8 @@ function GDCore(env) {
     return "application/octet-stream";
   }
   function audioBytes(data) {
-    var clean = String(data || "").replace(/^data:[^,]*;base64,/, "").replace(/\s+/g, "");
+    var clean = typeof data === "string" ? data : String(data || "");
+    if (/^data:|\s/.test(clean)) clean = clean.replace(/^data:[^,]*;base64,/, "").replace(/\s+/g, "");
     if (!clean) throw new Error("missing");
     var bin = atob(clean), out = new Uint8Array(bin.length);
     for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
@@ -146,13 +147,17 @@ function GDCore(env) {
       if (!u) return err(401, "Accedi per condividere la musica");
       if (!env.putAudio || !env.getAudio) return err(501, "Archivio audio non disponibile");
       b = body(init);
-      var maxAudio = 16 * 1024 * 1024;
-      var b64 = String(b.data || "").replace(/^data:[^,]*;base64,/, "").replace(/\s+/g, "");
+      var maxAudio = 30 * 1024 * 1024;
+      var rawAudio = b.data;
+      b.data = null;
+      var b64 = String(rawAudio || "").replace(/^data:[^,]*;base64,/, "").replace(/\s+/g, "");
+      rawAudio = null;
       if (!b64) return err(422, "File audio mancante");
-      if (b64.length > Math.ceil(maxAudio * 4 / 3) + 8) return err(413, "File troppo grande (max 16 MB)");
+      if (b64.length > Math.ceil(maxAudio * 4 / 3) + 8) return err(413, "File troppo grande (max 30 MB)");
       var bytes;
       try { bytes = audioBytes(b64); } catch (e) { return err(422, "File audio non valido"); }
-      if (!bytes.length || bytes.length > maxAudio) return err(413, "File troppo grande (max 16 MB)");
+      b64 = null;
+      if (!bytes.length || bytes.length > maxAudio) return err(413, "File troppo grande (max 30 MB)");
       var type = String(b.type || "").toLowerCase().slice(0, 80);
       if (!/^audio\/[a-z0-9.+-]+$/.test(type)) type = audioType(b.name);
       if (!/^audio\/[a-z0-9.+-]+$/.test(type)) return err(422, "Formato audio non valido");
@@ -584,7 +589,7 @@ function serveStatic(req, res, p) {
 http.createServer(function (req, res) {
   if (req.method === "OPTIONS") { res.writeHead(204, CORS); return res.end(); }
   var chunks = [], size = 0;
-  req.on("data", function (c) { size += c.length; if (size > 30e6) req.destroy(); else chunks.push(c); });
+  req.on("data", function (c) { size += c.length; if (size > 42e6) req.destroy(); else chunks.push(c); });
   req.on("end", function () {
     var raw = Buffer.concat(chunks).toString("utf8");
     var url = new URL(req.url, "http://x");

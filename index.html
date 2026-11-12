@@ -403,7 +403,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b0e14">
-<meta name="description" content="Geometry Dash nel browser: 30 livelli + 2 demon, 8 modalità, portali, orb, pad, icon kit e level editor con livelli online.">
+<meta name="description" content="Geometry Dash nel browser: 30 livelli + 2 demon, 9 modalità, portali, orb, pad, icon kit e level editor con livelli online.">
 <title>Geometry Dash Web — Livelli, Icon Kit &amp; Editor</title>
 <style>html,body{margin:0;min-height:100%;background:#0b0e14;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}canvas{-ms-touch-action:none;touch-action:none}button{-webkit-tap-highlight-color:transparent}</style>
 <style id="gd-legacy-css">
@@ -1156,7 +1156,7 @@ function GDCore(env) {
     function err(status, detail) { return json(status, { detail: detail }); }
     function me() { var id = env.session(); return id && db.users[id] ? db.users[id] : null; }
     function pubUser(u) { return { user_id: u.user_id, username: u.username }; }
-    function defaultIcons() { return { cube: 1, ship: 1, ball: 1, ufo: 1, wave: 1, robot: 1, spider: 1, swing: 1, color1: 0, color2: 3, glow: false }; }
+    function defaultIcons() { return { cube: 1, ship: 1, ball: 1, ufo: 1, wave: 1, robot: 1, spider: 1, swing: 1, boat: 1, color1: 0, color2: 3, glow: false }; }
     function progOf(u) {
         var p = db.progress[u.user_id];
         if (!p)
@@ -79396,6 +79396,7 @@ var defaultIcons = function () { return ({
     robot: 1,
     spider: 1,
     swing: 1,
+    boat: 1,
     color1: 0,
     color2: 3,
     glow: false
@@ -80263,7 +80264,7 @@ function exportSongFile(seed, seconds, fmtId, onStatus) {
         });
     });
 }
-var MAX_TRACK = 16 * 1024 * 1024;
+var MAX_TRACK = 30 * 1024 * 1024;
 var memTracks = new Map();
 var bufCache = new Map();
 var remoteCache = new Map();
@@ -80367,7 +80368,7 @@ function addUserTrack(file) {
                     if (!file)
                         throw new Error("Nessun file");
                     if (file.size > MAX_TRACK)
-                        throw new Error("File troppo grande (max 16 MB)");
+                        throw new Error("File troppo grande (max 30 MB)");
                     ctx = exports.audio.ensure();
                     return [4, readFile(file)];
                 case 1:
@@ -80851,6 +80852,84 @@ function drawIcon(ctx, mode, id, cx, cy, s, angle, o) {
             ctx.fill();
             break;
         }
+        case "boat": {
+            var bv = (id - 1) % 4;
+            var boatPower = o.charge || 0;
+            var wingFlap = Math.sin(t * (8 + boatPower * 8)) * (.24 + boatPower * .14);
+            for (var ws = -1; ws <= 1; ws += 2) {
+                ctx.save();
+                ctx.translate(ws * h * .04, -h * .1);
+                ctx.rotate(ws * (.18 + wingFlap));
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.quadraticCurveTo(ws * h * .7, -h * .62, ws * h * (1.45 + boatPower * .12), -h * .18);
+                ctx.quadraticCurveTo(ws * h * .9, h * .26, ws * h * .18, h * .16);
+                ctx.closePath();
+                ctx.globalAlpha = .82;
+                ctx.fillStyle = c2;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                outline(ctx, lw * .55);
+                ctx.beginPath();
+                ctx.moveTo(ws * h * .2, h * .04);
+                ctx.quadraticCurveTo(ws * h * .62, -h * .24, ws * h * 1.12, -h * .16);
+                ctx.strokeStyle = c1;
+                ctx.lineWidth = Math.max(1, lw * .32);
+                ctx.stroke();
+                ctx.restore();
+            }
+            ctx.beginPath();
+            ctx.moveTo(-h, h * .15);
+            ctx.lineTo(h, h * .15);
+            ctx.lineTo(h * .55, h * .62);
+            ctx.lineTo(-h * .55, h * .62);
+            ctx.closePath();
+            ctx.fillStyle = c1;
+            ctx.fill();
+            outline(ctx, lw);
+            ctx.beginPath();
+            ctx.rect(-h * .8, h * .28, h * 1.6, h * .13);
+            ctx.fillStyle = c2;
+            ctx.fill();
+            ctx.beginPath();
+            ctx.rect(-h * .06, -h * .98, h * .12, h * 1.15);
+            ctx.fillStyle = c2;
+            ctx.fill();
+            outline(ctx, lw * .5);
+            ctx.beginPath();
+            if (bv === 0) {
+                ctx.moveTo(h * .08, -h * .9);
+                ctx.lineTo(h * .82, h * .02);
+                ctx.lineTo(h * .08, h * .02);
+            }
+            else if (bv === 1) {
+                ctx.moveTo(-h * .08, -h * .9);
+                ctx.lineTo(-h * .82, h * .02);
+                ctx.lineTo(-h * .08, h * .02);
+            }
+            else if (bv === 2) {
+                ctx.moveTo(-h * .72, -h * .55);
+                ctx.lineTo(h * .72, -h * .55);
+                ctx.lineTo(h * .06, h * .02);
+            }
+            else {
+                ctx.moveTo(0, -h * 1.12);
+                ctx.lineTo(h * .62, -h * .28);
+                ctx.lineTo(0, -h * .28);
+            }
+            ctx.closePath();
+            ctx.fillStyle = c2;
+            ctx.fill();
+            outline(ctx, lw * .7);
+            ctx.beginPath();
+            ctx.moveTo(-h * .9, h * .78);
+            ctx.quadraticCurveTo(-h * .45, h * .58, 0, h * .78);
+            ctx.quadraticCurveTo(h * .45, h * .98, h * .9, h * .78);
+            ctx.strokeStyle = c2;
+            ctx.lineWidth = lw * .7;
+            ctx.stroke();
+            break;
+        }
     }
     ctx.restore();
 }
@@ -80909,6 +80988,7 @@ exports.OBJECTS = [
     d("portal_robot", "portal", "portals", 1, 3, "#dddddd", "Robot portal", "Portale robot"),
     d("portal_spider", "portal", "portals", 1, 3, "#a020f0", "Spider portal", "Portale ragno"),
     d("portal_swing", "portal", "portals", 1, 3, "#ffee22", "Swing portal", "Portale swing"),
+    d("portal_boat", "portal", "portals", 1, 3, "#ff9a3c", "Boat portal", "Portale barca"),
     d("portal_grav_up", "portal", "portals", 1, 3, "#ffe600", "Gravity up portal", "Portale gravità su"),
     d("portal_grav_down", "portal", "portals", 1, 3, "#22aaff", "Gravity normal portal", "Portale gravità normale"),
     d("portal_grav_flip", "portal", "portals", 1, 3, "#22ff66", "Gravity flip portal", "Portale inverti gravità"),
@@ -82525,6 +82605,7 @@ function drawObject(ctx, o, px, py, u, opt) {
                 portal_robot: "R",
                 portal_spider: "S",
                 portal_swing: "◎",
+                portal_boat: "⛵",
                 portal_grav_up: "↑",
                 portal_grav_down: "↓",
                 portal_grav_flip: "⇅",
@@ -83227,7 +83308,12 @@ exports.PHYS = {
     BALL_V: 6.037,
     BALL_G: 55.882,
     SWING_G: 55,
-    SWING_VMAX: 16
+    SWING_VMAX: 16,
+    BOAT_CHARGE: 1.15,
+    BOAT_JUMP_MIN: .55,
+    BOAT_JUMP_MAX: 1.65,
+    BOAT_ORB_MIN: 1,
+    BOAT_ORB_MAX: 1.55
 };
 var STEP = 1 / 240;
 var BOUND_H = {
@@ -83764,6 +83850,7 @@ var Engine = (function () {
         this.shakeAmp = 4;
         this.song = null;
         this.songStartTime = 0;
+        this.songOffset = Math.max(0, Number(data.settings && data.settings.songStart) || 0);
         this.coinCount = 0;
         this.data = data;
         this.maxIcons = Math.max(3, Math.min(GD_MAX_ICONS, Number(data.settings && data.settings.trioMax) || 3));
@@ -84026,6 +84113,10 @@ var Engine = (function () {
                 spiderDash: false,
                 boost: 0,
                 fresh: false,
+                boatCharge: 0,
+                boatOrb: null,
+                boatBuffer: 0,
+                boatBufferT: 0,
                 second: false
             }];
         this.speed = Math.max(0, Math.min(4, (_a = st.speed) !== null && _a !== void 0 ? _a : 1));
@@ -84064,7 +84155,7 @@ var Engine = (function () {
             this.attempts++;
         this.jumps = first ? 0 : this.jumps;
         this.song = this.opts.song;
-        this.songStartTime = 0;
+        this.songStartTime = -this.songOffset;
         this.shake = 0;
         this.gs = new Map();
         this.anims = [];
@@ -84085,7 +84176,7 @@ var Engine = (function () {
         this.pulseT = 0;
         this.applyGroups();
         __GD47__1.audio.setMusicVol(window.GDSettings ? window.GDSettings.get("music") : 1);
-        __GD47__1.audio.play(this.song, 0);
+        __GD47__1.audio.play(this.song, this.songOffset);
         if (this.practice && this.startPos && !first)
             this.restore(this.startPos, true);
     };
@@ -84108,6 +84199,9 @@ var Engine = (function () {
             for (var _b = __values(this.players), _c = _b.next(); !_c.done; _c = _b.next()) {
                 var p = _c.value;
                 p.fresh = true;
+                /* also a very quick tap must produce at least the minimum boat jump */
+                if (p.mode === "boat" && !(p.boatCharge > 0))
+                    p.boatCharge = .001;
             }
         }
         catch (e_12_1) { e_12 = { error: e_12_1 }; }
@@ -84140,6 +84234,15 @@ var Engine = (function () {
                 if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
             }
             finally { if (e_13) throw e_13.error; }
+        }
+    };
+    Engine.prototype.cancelBoatCharge = function () {
+        for (var i = 0; i < this.players.length; i++) {
+            var p = this.players[i];
+            p.boatCharge = 0;
+            p.boatOrb = null;
+            p.boatBuffer = 0;
+            p.boatBufferT = 0;
         }
     };
     Engine.prototype.setPractice = function (on) {
@@ -84244,7 +84347,7 @@ var Engine = (function () {
             var sg = s.song === undefined ? this.opts.song : s.song;
             var songAt = Math.max(0, Number(s.songAt) || 0);
             this.song = sg;
-            this.songStartTime = Math.max(0, this.time - songAt);
+            this.songStartTime = this.time - songAt;
             if (sg == null)
                 __GD47__1.audio.stop();
             else
@@ -84345,7 +84448,8 @@ var Engine = (function () {
         wave: 3 / 30,
         robot: 9 / 30,
         spider: 9 / 30,
-        swing: 9 / 30
+        swing: 9 / 30,
+        boat: 9 / 30
     };
     var HIT_BLUE_MINI = {
         cube: 10 / 30,
@@ -84355,7 +84459,8 @@ var Engine = (function () {
         wave: 3 / 30,
         robot: 10 / 30,
         spider: 10 / 30,
-        swing: 10 / 30
+        swing: 10 / 30,
+        boat: 10 / 30
     };
     var HIT_RED = {
         cube: 1,
@@ -84365,7 +84470,8 @@ var Engine = (function () {
         wave: 10 / 30,
         robot: 1,
         spider: 27.5 / 30,
-        swing: 1
+        swing: 1,
+        boat: 1
     };
     var HIT_RED_MINI = {
         cube: .6,
@@ -84375,7 +84481,8 @@ var Engine = (function () {
         wave: .2,
         robot: .6,
         spider: .55,
-        swing: .6
+        swing: .6,
+        boat: .6
     };
     Engine.prototype.hitBox = function (p, red) {
         var s = this.size(p);
@@ -84398,6 +84505,7 @@ var Engine = (function () {
             ship: exports.PHYS.SHIP_DOWN,
             ufo: exports.PHYS.UFO_G,
             swing: exports.PHYS.SWING_G,
+            boat: exports.PHYS.G,
             wave: exports.PHYS.G
         }[p.mode];
     };
@@ -84410,6 +84518,7 @@ var Engine = (function () {
             ship: .55,
             ufo: .8,
             swing: .55,
+            boat: 1,
             wave: 0
         }[p.mode] * (p.mini ? .7 : 1);
         p.vy = Math.sqrt(2 * this.gm(p) * height * hs) * p.grav;
@@ -84491,6 +84600,51 @@ var Engine = (function () {
                 size: .2
             });
     };
+    Engine.prototype.teleportSpiderNearest = function (p, obj) {
+        var s = this.size(p);
+        var cand = this.near(p.x - 1, p.x + s + 1).filter(function (o) { return !o.broken && (o.def.kind === "solid" || o.def.kind === "brick" || o.def.kind === "glass") && o.x < p.x + s && o.x + o.w > p.x; });
+        var rot = obj ? ((Math.round(obj.r || 0) % 4) + 4) % 4 : 0;
+        var up = rot !== 2;
+        var from = p.y;
+        if (up) {
+            var ceilY = this.bounds ? this.bounds.ceil : p.y + 40;
+            var ceilBest = ceilY;
+            for (var i = 0; i < cand.length; i++) {
+                var bottom = cand[i].y;
+                if (bottom >= p.y + s - .05 && bottom < ceilBest)
+                    ceilBest = bottom;
+            }
+            p.grav = -1;
+            p.y = ceilBest - s;
+        }
+        else {
+            var floorY = this.bounds ? this.bounds.floor : 0;
+            var floorBest = floorY;
+            for (var j = 0; j < cand.length; j++) {
+                var top = cand[j].y + cand[j].h;
+                if (top <= p.y + .05 && top > floorBest)
+                    floorBest = top;
+            }
+            p.grav = 1;
+            p.y = floorBest;
+        }
+        p.vy = 0;
+        p.onGround = true;
+        p.boost = 0;
+        p.dash = false;
+        p.spiderDash = false;
+        for (var k = 0; k < 6; k++)
+            this.particles.push({
+                x: p.x + s / 2,
+                y: from + (p.y - from) * k / 6 + s / 2,
+                vx: 0,
+                vy: 0,
+                life: .25,
+                max: .25,
+                color: "#ffffff",
+                size: .2
+            });
+    };
     Engine.prototype.setBoundsFrom = function (o, mode) {
         var H = this.dual ? 10 : BOUND_H[mode];
         if (!H) {
@@ -84543,7 +84697,27 @@ var Engine = (function () {
             else if (kind === "orb") {
                 var ocx = o.x + o.w / 2, ocy = o.y + o.h / 2;
                 if (this_1.holding && !this_1.used.has(key) && circleBox(ocx, ocy, o.circle, box)) {
-                    if (this_1.applyBoost(p, o.o.t, false, o.o)) {
+                    var chargeOrb = [
+                        "orb_yellow",
+                        "orb_pink",
+                        "orb_red",
+                        "orb_blue",
+                        "orb_green",
+                        "orb_black"
+                    ].includes(o.o.t);
+                    if (p.mode === "boat" && chargeOrb) {
+                        if (!p.boatOrb) {
+                            p.boatOrb = {
+                                key: key,
+                                t: o.o.t,
+                                obj: o.o,
+                                x: ocx,
+                                y: ocy
+                            };
+                            p.fresh = false;
+                        }
+                    }
+                    else if (!p.boatOrb && this_1.applyBoost(p, o.o.t, false, o.o)) {
                         this_1.used.add(key);
                         p.fresh = false;
                         this_1.burst(ocx, ocy, o.def.color, 10, 5, .4);
@@ -84552,8 +84726,13 @@ var Engine = (function () {
                 }
             }
             else if (kind === "portal" || kind === "speed") {
-                if (overlap(box, ob) && !this_1.used.has(key)) {
+                var mainGate = this_1.opts.main && (kind === "portal" || kind === "speed");
+                var portalBox = mainGate ? [o.x, -1000, o.x + o.w, 1000] : ob;
+                var portalKey = mainGate ? "maingate:" + pi + ":" + o.x + ":" + o.o.t : "";
+                if (overlap(box, portalBox) && !this_1.used.has(key) && (!portalKey || !this_1.used.has(portalKey))) {
                     this_1.used.add(key);
+                    if (portalKey)
+                        this_1.used.add(portalKey);
                     this_1.applyPortal(p, o);
                 }
             }
@@ -84854,8 +85033,9 @@ var Engine = (function () {
         p.dash = false;
         p.spiderDash = false;
     };
-    Engine.prototype.applyBoost = function (p, t, pad, obj) {
+    Engine.prototype.applyBoost = function (p, t, pad, obj, mul) {
         var kind = t.replace(/^(pad|orb)_/, "");
+        var scale = mul || 1;
         if (p.mode === "wave" && ![
             "blue",
             "green",
@@ -84876,7 +85056,7 @@ var Engine = (function () {
             case "yellow":
             case "pink":
             case "red":
-                this.boostV(p, this.boostSpeed(p, kind, pad), false, 1);
+                this.boostV(p, this.boostSpeed(p, kind, pad) * scale, false, 1);
                 break;
             case "blue":
                 if (p.mode === "wave") {
@@ -84885,16 +85065,16 @@ var Engine = (function () {
                     p.onGround = false;
                 }
                 else
-                    this.boostV(p, this.boostSpeed(p, "blue", pad), true, -1);
+                    this.boostV(p, this.boostSpeed(p, "blue", pad) * scale, true, -1);
                 break;
             case "green":
                 flip();
                 if (p.mode === "wave")
                     break;
-                this.boostV(p, this.boostSpeed(p, "green", pad), false, 1);
+                this.boostV(p, this.boostSpeed(p, "green", pad) * scale, false, 1);
                 break;
             case "black":
-                this.boostV(p, this.boostSpeed(p, "black", pad), false, -1);
+                this.boostV(p, this.boostSpeed(p, "black", pad) * scale, false, -1);
                 break;
             case "dash":
                 p.dash = true;
@@ -84914,8 +85094,12 @@ var Engine = (function () {
                 p.vy = 0;
                 break;
             case "spider":
-                flip();
-                this.teleportSpider(p);
+                if (pad)
+                    this.teleportSpiderNearest(p, obj);
+                else {
+                    flip();
+                    this.teleportSpider(p);
+                }
                 break;
             case "trigger":
                 this.fireTriggerGroup(obj ? obj.tg : 1, p);
@@ -85072,7 +85256,8 @@ var Engine = (function () {
                     "wave",
                     "robot",
                     "spider",
-                    "swing"
+                    "swing",
+                    "boat"
                 ].includes(m)) {
                     var changed = p.mode !== m;
                     try {
@@ -85084,6 +85269,12 @@ var Engine = (function () {
                                 q.mode = m;
                                 q.dash = false;
                                 q.boost = 0;
+                                q.boatCharge = 0;
+                                q.boatOrb = null;
+                                q.boatBuffer = 0;
+                                q.boatBufferT = 0;
+                                if (this.holding && m === "boat")
+                                    q.boatCharge = .001;
                             }
                         }
                     }
@@ -85128,6 +85319,60 @@ var Engine = (function () {
                 }
                 else
                     p.vy -= exports.PHYS.GRAV[this.speed] * g * h;
+                break;
+            case "boat":
+                if (p.boatBufferT > 0)
+                    p.boatBufferT = Math.max(0, p.boatBufferT - h);
+                /* release slightly before landing: keep the jump ready for a short window */
+                if (!this.holding && p.onGround && p.boatBufferT > 0 && p.boatBuffer > 0) {
+                    var bbuf = p.boatBuffer;
+                    p.boatBuffer = 0;
+                    p.boatBufferT = 0;
+                    p.boatCharge = 0;
+                    p.vy = exports.PHYS.JUMPV[this.speed] * (exports.PHYS.BOAT_JUMP_MIN + (exports.PHYS.BOAT_JUMP_MAX - exports.PHYS.BOAT_JUMP_MIN) * bbuf) * g * mj;
+                    p.onGround = false;
+                    p.fresh = false;
+                    this.jumps++;
+                    break;
+                }
+                if (this.holding) {
+                    p.boatBuffer = 0;
+                    p.boatBufferT = 0;
+                    p.boatCharge = Math.min(exports.PHYS.BOAT_CHARGE, (p.boatCharge || 0) + h);
+                    if (p.onGround)
+                        p.vy = 0;
+                    else
+                        p.vy -= exports.PHYS.G * g * h;
+                }
+                else {
+                    var bq = Math.min(1, (p.boatCharge || 0) / exports.PHYS.BOAT_CHARGE);
+                    if (p.boatOrb) {
+                        var bo = p.boatOrb;
+                        p.boatOrb = null;
+                        var bm = exports.PHYS.BOAT_ORB_MIN + (exports.PHYS.BOAT_ORB_MAX - exports.PHYS.BOAT_ORB_MIN) * bq;
+                        if (this.applyBoost(p, bo.t, false, bo.obj, bm)) {
+                            this.used.add(bo.key);
+                            p.fresh = false;
+                            this.burst(bo.x, bo.y, "#ff9a3c", 12, 6, .5);
+                            __GD47__1.audio.sfx("orb");
+                        }
+                    }
+                    else if (p.onGround && bq > 0) {
+                        var bj = exports.PHYS.BOAT_JUMP_MIN + (exports.PHYS.BOAT_JUMP_MAX - exports.PHYS.BOAT_JUMP_MIN) * bq;
+                        p.vy = exports.PHYS.JUMPV[this.speed] * bj * g * mj;
+                        p.onGround = false;
+                        p.fresh = false;
+                        this.jumps++;
+                    }
+                    else {
+                        if (bq > 0) {
+                            p.boatBuffer = bq;
+                            p.boatBufferT = .18;
+                        }
+                        p.vy -= exports.PHYS.GRAV[this.speed] * g * h;
+                    }
+                    p.boatCharge = 0;
+                }
                 break;
             case "robot":
                 if (p.onGround && this.holding) {
@@ -85948,9 +86193,23 @@ var Engine = (function () {
                         c2: c2,
                         glow: ic.glow && (!window.GDSettings || GDSettings.get("glow")),
                         t: this.time,
+                        charge: p.mode === "boat" ? Math.min(1, (p.boatCharge || 0) / exports.PHYS.BOAT_CHARGE) : 0,
                         cubeId: ic.icons.cube,
                         flip: flip
                     });
+                    if (p.mode === "boat" && p.boatCharge > 0) {
+                        var bq = Math.min(1, p.boatCharge / exports.PHYS.BOAT_CHARGE);
+                        var bw = s * u * .95, bh = Math.max(2, u * .09);
+                        var bx = sx(p.x + s / 2) - bw / 2;
+                        var by = sy(p.y + s) - u * .28;
+                        ctx.fillStyle = "rgba(0,0,0,.55)";
+                        ctx.fillRect(bx, by, bw, bh);
+                        ctx.fillStyle = bq >= 1 ? "#ffee22" : "#ff9a3c";
+                        ctx.fillRect(bx, by, bw * bq, bh);
+                        ctx.strokeStyle = "rgba(255,255,255,.75)";
+                        ctx.lineWidth = Math.max(1, u * .025);
+                        ctx.strokeRect(bx, by, bw, bh);
+                    }
                     if (p.dash) {
                         ctx.save();
                         ctx.translate(sx(p.x + s / 2), sy(p.y + s / 2));
@@ -86135,6 +86394,7 @@ var DICT = {
     platformer: ["Modalità platformer", "Platformer mode"],
     platformerHint: ["← → o A/D per muoverti · Spazio/↑ per saltare · Esc pausa", "← → or A/D to move · Space/↑ to jump · Esc pause"],
     song: ["Canzone (seed)", "Song (seed)"],
+    songStart: ["Inizio canzone (s)", "Song start (s)"],
     trioIcons: ["Portale trio: max icone (3–15)", "Trio portal: max icons (3–15)"],
     text: ["Testo", "Text"],
     color: ["Colore", "Color"],
@@ -86150,6 +86410,8 @@ var DICT = {
     editorHint: ["Trascina per spostare la vista · rotella per scorrere · R ruota · Canc elimina · 4 = Modifica · frecce sposta (Maiusc 1px, Alt 0,5px, Ctrl 5 blocchi)", "Drag to pan · wheel to scroll · R rotate · Del delete · 4 = Edit · arrows move (Shift 1px, Alt 0.5px, Ctrl 5 blocks)"],
     likes: ["Mi piace", "Likes"],
     play2: ["Gioca", "Play"],
+    update: ["Aggiornamento", "Update"],
+    updateHint: ["C'è una nuova versione del livello. Clicca per continuare.", "This level has a new version. Click to continue."],
     newBest: ["Nuovo record!", "New best!"],
     loading: ["Caricamento…", "Loading…"],
     error: ["Errore", "Error"],
@@ -86316,7 +86578,7 @@ function FullscreenBtn(_a) {
 }
 function GameCanvas(_a) {
     var _this = this;
-    var level = _a.level, title = _a.title, icons = _a.icons, startPractice = _a.startPractice, _b = _a.allowPractice, allowPractice = _b === void 0 ? true : _b, badge = _a.badge, mp = _a.mp, onExit = _a.onExit, onDeath = _a.onDeath, onComplete = _a.onComplete;
+    var level = _a.level, title = _a.title, icons = _a.icons, startPractice = _a.startPractice, _b = _a.allowPractice, allowPractice = _b === void 0 ? true : _b, badge = _a.badge, mp = _a.mp, mainLevel = _a.mainLevel, onExit = _a.onExit, onDeath = _a.onDeath, onComplete = _a.onComplete;
     _s();
     var _d = __read((0, __GD59__1.useLang)(), 2), lang = _d[0], t = _d[1];
     var levelInfo = window.__gdLevelInfo ? window.__gdLevelInfo(level, lang) : null;
@@ -86326,6 +86588,7 @@ function GameCanvas(_a) {
     var pctRef = useRef(null);
     var engRef = useRef(null);
     var pausedRef = useRef(false);
+    var finishedRef = useRef(null);
     var _e = __read(useState(false), 2), paused = _e[0], setPaused = _e[1];
     var _f = __read(useState(1), 2), attempt = _f[0], setAttempt = _f[1];
     var _g = __read(useState(!!startPractice), 2), practice = _g[0], setPractice = _g[1];
@@ -86357,16 +86620,17 @@ function GameCanvas(_a) {
             return;
         var cv = canvasRef.current;
         var ctx = cv.getContext("2d");
-        var finished = null;
+        finishedRef.current = null;
         var eng = new __GD48__1.Engine(level, {
             mp: mp,
             practice: !!startPractice,
             icons: icons,
+            main: !!mainLevel,
             song: level.settings.songUrl || level.settings.song || 1,
             onDeath: function (pc, pr) { var _a, _b; return (_b = (_a = cb.current).onDeath) === null || _b === void 0 ? void 0 : _b.call(_a, pc, pr); },
             onComplete: function (r) {
                 var _a, _b;
-                finished = performance.now();
+                finishedRef.current = performance.now();
                 setTimeout(function () { return setDone(__assign(__assign({}, r), { practice: eng.practice })); }, 1100);
                 (_b = (_a = cb.current).onComplete) === null || _b === void 0 ? void 0 : _b.call(_a, __assign(__assign({}, r), { practice: eng.practice }));
             },
@@ -86374,7 +86638,7 @@ function GameCanvas(_a) {
         });
         engRef.current = eng;
         var onSettingsOpen = function () {
-            if (!pausedRef.current && finished === null)
+            if (!pausedRef.current && finishedRef.current === null)
                 togglePause();
         };
         window.addEventListener("gd-settings-open", onSettingsOpen);
@@ -86426,17 +86690,17 @@ function GameCanvas(_a) {
             var pauseK = bind("pauseKey", "Escape");
             if (isJump(e)) {
                 e.preventDefault();
-                if (!e.repeat && !pausedRef.current && finished === null)
+                if (!e.repeat && !pausedRef.current && finishedRef.current === null)
                     eng.press();
             }
             else if (isPlatformer && (e.code === "ArrowLeft" || e.code === "KeyA")) {
                 e.preventDefault();
-                if (!pausedRef.current && finished === null)
+                if (!pausedRef.current && finishedRef.current === null)
                     eng.setWalk(-1);
             }
             else if (isPlatformer && (e.code === "ArrowRight" || e.code === "KeyD")) {
                 e.preventDefault();
-                if (!pausedRef.current && finished === null)
+                if (!pausedRef.current && finishedRef.current === null)
                     eng.setWalk(1);
             }
             else if (e.code === pauseK || (pauseK === "Escape" && e.code === "KeyP"))
@@ -86457,14 +86721,24 @@ function GameCanvas(_a) {
         var pd = function (e) {
             e.preventDefault();
             __GD47__1.audio.ensure();
-            if (!pausedRef.current && finished === null)
+            if (!pausedRef.current && finishedRef.current === null)
                 eng.press();
         };
         var pu = function () { return eng.release(); };
+        var cancelHold = function () {
+            eng.release();
+            eng.cancelBoatCharge();
+            eng.setWalk(0);
+        };
+        var onVisibility = function () { if (document.hidden)
+            cancelHold(); };
         window.addEventListener("keydown", kd);
         window.addEventListener("keyup", ku);
         cv.addEventListener("pointerdown", pd);
         window.addEventListener("pointerup", pu);
+        window.addEventListener("blur", cancelHold);
+        document.addEventListener("visibilitychange", onVisibility);
+        cv.addEventListener("pointercancel", cancelHold);
         return function () {
             cancelAnimationFrame(raf);
             window.removeEventListener("resize", resize);
@@ -86473,7 +86747,11 @@ function GameCanvas(_a) {
             window.removeEventListener("keyup", ku);
             cv.removeEventListener("pointerdown", pd);
             window.removeEventListener("pointerup", pu);
+            window.removeEventListener("blur", cancelHold);
+            document.removeEventListener("visibilitychange", onVisibility);
+            cv.removeEventListener("pointercancel", cancelHold);
             __GD47__1.audio.stop();
+            finishedRef.current = null;
             engRef.current = null;
         };
     }, [level, songReady]);
@@ -86484,12 +86762,14 @@ function GameCanvas(_a) {
         pausedRef.current = !pausedRef.current;
         setPaused(pausedRef.current);
         eng.release();
+        eng.cancelBoatCharge();
         eng.setWalk(0);
         if (__GD47__1.audio.ctx)
             void (pausedRef.current ? __GD47__1.audio.ctx.suspend() : __GD47__1.audio.ctx.resume());
     }
     var restart = function () {
         var eng = engRef.current;
+        finishedRef.current = null;
         setDone(null);
         eng.checkpoints = [];
         setCps(0);
@@ -87525,6 +87805,7 @@ function iconColors(sel) {
         robot: 1,
         spider: 1,
         swing: 1,
+        boat: 1,
         color1: 0,
         color2: 3,
         glow: false
@@ -87541,7 +87822,8 @@ function iconColors(sel) {
             wave: s.wave,
             robot: s.robot,
             spider: s.spider,
-            swing: s.swing
+            swing: s.swing,
+            boat: s.boat || 1
         }
     };
 }
@@ -96348,7 +96630,8 @@ exports.MODES = [
     "wave",
     "robot",
     "spider",
-    "swing"
+    "swing",
+    "boat"
 ];
 var emptyLevel = function () { return ({
     settings: {
@@ -96359,6 +96642,7 @@ var emptyLevel = function () { return ({
         mini: false,
         platformer: false,
         song: 0,
+        songStart: 0,
         trioMax: 3
     },
     objects: []
@@ -98776,7 +99060,7 @@ function RepeatBtn(_a) {
 }
 function MusicPicker(_a) {
     var _this = this;
-    var value = _a.value, onPick = _a.onPick, lang = _a.lang, sharedUrl = _a.url;
+    var value = _a.value, onPick = _a.onPick, lang = _a.lang, sharedUrl = _a.url, startAt = _a.startAt;
     var T = function (a, b) { return lang === "it" ? a : b; };
     var _b = __read(useState([]), 2), tracks = _b[0], setTracks = _b[1];
     var _d = __read(useState(""), 2), busy = _d[0], setBusy = _d[1];
@@ -98821,7 +99105,7 @@ function MusicPicker(_a) {
             return;
         }
         __GD47__1.audio.setMusicVol(window.GDSettings ? window.GDSettings.get("music") : 1);
-        __GD47__1.audio.play(!known && sharedUrl ? sharedUrl : value);
+        __GD47__1.audio.play(!known && sharedUrl ? sharedUrl : value, Math.max(0, Number(startAt) || 0));
         pl.current = true;
         setPlaying(true);
     };
@@ -98841,9 +99125,9 @@ function MusicPicker(_a) {
         }
     }); }); };
     var known = tracks.some(function (t) { return t.id === cur; });
-    return __h("div", { style: __assign(__assign({}, UI.col), { borderRadius: 8, border: "1px solid rgba(255,255,255,.1)", padding: 8, gridColumn: "1 / -1", width: "100%", boxSizing: "border-box" }), "data-testid": "music-picker" }, __h("span", { style: UI.mono }, T("Musica (file audio tuo)", "Music (your audio file)")), __h("select", { value: cur ? value : "auto", onChange: function (e) { return pick(e.target.value === "auto" ? 1 : e.target.value); }, style: UI.input, "data-testid": "music-select" }, __h("option", { value: "auto", style: { color: "#000" } }, T("Automatica (generata)", "Automatic (generated)")), tracks.map(function (t) { return __h("option", { key: t.id, value: "u:" + t.id, style: { color: "#000" } }, "♪ " + t.name + " (" + fmtDur(t.dur || 0) + ")"); }), cur && !known ? __h("option", { key: "miss", value: value, style: { color: "#000" } }, sharedUrl ? T("(file condiviso con il livello)", "(file shared with the level)") : T("(file non trovato su questo dispositivo)", "(file not found on this device)")) : null), __h("div", { style: UI.row }, __h("button", { type: "button", style: UI.btnOn, disabled: !!busy, onClick: function () { return inp.current && inp.current.click(); }, "data-testid": "music-upload" }, busy || T("+ Carica file audio", "+ Load audio file")), cur ? __h("button", { type: "button", style: playing ? UI.btnOn : UI.btn, onClick: toggle, "data-testid": "music-preview" }, playing ? "■ " + T("Ferma", "Stop") : "▶ " + T("Ascolta", "Listen")) : null, cur && known ? __h("button", { type: "button", style: UI.danger, onClick: del, title: T("Togli dalla libreria", "Remove from library"), "data-testid": "music-delete" }, "🗑") : null, __h("input", { ref: inp, type: "file", accept: "audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac", onChange: onFile, style: { display: "none" }, "data-testid": "music-file" })), __h("p", { style: __assign(__assign({}, UI.mono), { margin: 0, fontSize: 11 }) }, T("La canzone viene caricata sul server e chi prova il livello la scarica e la ascolta. Formati: MP3, M4A, WAV, OGG (dipende dal browser, max 16 MB).", "The song is uploaded to the server: everyone who plays the level downloads it and hears it. Formats: MP3, M4A, WAV, OGG (browser dependent, max 16 MB).")));
+    return __h("div", { style: __assign(__assign({}, UI.col), { borderRadius: 8, border: "1px solid rgba(255,255,255,.1)", padding: 8, gridColumn: "1 / -1", width: "100%", boxSizing: "border-box" }), "data-testid": "music-picker" }, __h("span", { style: UI.mono }, T("Musica (file audio tuo)", "Music (your audio file)")), __h("select", { value: cur ? value : "auto", onChange: function (e) { return pick(e.target.value === "auto" ? 1 : e.target.value); }, style: UI.input, "data-testid": "music-select" }, __h("option", { value: "auto", style: { color: "#000" } }, T("Automatica (generata)", "Automatic (generated)")), tracks.map(function (t) { return __h("option", { key: t.id, value: "u:" + t.id, style: { color: "#000" } }, "♪ " + t.name + " (" + fmtDur(t.dur || 0) + ")"); }), cur && !known ? __h("option", { key: "miss", value: value, style: { color: "#000" } }, sharedUrl ? T("(file condiviso con il livello)", "(file shared with the level)") : T("(file non trovato su questo dispositivo)", "(file not found on this device)")) : null), __h("div", { style: UI.row }, __h("button", { type: "button", style: UI.btnOn, disabled: !!busy, onClick: function () { return inp.current && inp.current.click(); }, "data-testid": "music-upload" }, busy || T("+ Carica file audio", "+ Load audio file")), cur ? __h("button", { type: "button", style: playing ? UI.btnOn : UI.btn, onClick: toggle, "data-testid": "music-preview" }, playing ? "■ " + T("Ferma", "Stop") : "▶ " + T("Ascolta", "Listen")) : null, cur && known ? __h("button", { type: "button", style: UI.danger, onClick: del, title: T("Togli dalla libreria", "Remove from library"), "data-testid": "music-delete" }, "🗑") : null, __h("input", { ref: inp, type: "file", accept: "audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac", onChange: onFile, style: { display: "none" }, "data-testid": "music-file" })), __h("p", { style: __assign(__assign({}, UI.mono), { margin: 0, fontSize: 11 }) }, T("La canzone viene caricata sul server e chi prova il livello la scarica e la ascolta. Formati: MP3, M4A, WAV, OGG (dipende dal browser, max 30 MB).", "The song is uploaded to the server: everyone who plays the level downloads it and hears it. Formats: MP3, M4A, WAV, OGG (browser dependent, max 30 MB).")));
 }
-var GD_MODES = ["cube", "ship", "ball", "ufo", "wave", "robot", "spider", "swing"];
+var GD_MODES = ["cube", "ship", "ball", "ufo", "wave", "robot", "spider", "swing", "boat"];
 var GD_ID = {
     block: 1, half: 40, brick: 1, glass: 1, slope: 289,
     spike: 8, spike_half: 39, spike_small: 103, thorns: 61, spike_glass: 8,
@@ -99108,7 +99392,7 @@ function gdEncodeLevel(data, defs) {
             return;
         extraColors += ch(n, gdRgb(_cmap[cid]));
     });
-    var head = "kS38," + ch(1000, bg) + ch(1001, gr) + ch(1009, gr) + extraColors + ",kA13,0,kA15,0,kA16,0,kA14,,kA6,0,kA7,0,kA17,0,kA18,0,kS39,0,kA2," + Math.max(0, GD_MODES.indexOf(st.mode || "cube")) + ",kA3," + (st.mini ? 1 : 0) + ",kA8,0,kA4," + ((_d = GD_SPEEDOUT[st.speed === undefined ? 1 : st.speed]) !== null && _d !== void 0 ? _d : 0) + ",kA9,0,kA10,0,kA11,0;";
+    var head = "kS38," + ch(1000, bg) + ch(1001, gr) + ch(1009, gr) + extraColors + ",kA13," + gdNum(Math.max(0, Number(st.songStart) || 0)) + ",kA15,0,kA16,0,kA14,,kA6,0,kA7,0,kA17,0,kA18,0,kS39,0,kA2," + Math.max(0, GD_MODES.indexOf(st.mode || "cube")) + ",kA3," + (st.mini ? 1 : 0) + ",kA8,0,kA4," + ((_d = GD_SPEEDOUT[st.speed === undefined ? 1 : st.speed]) !== null && _d !== void 0 ? _d : 0) + ",kA9,0,kA10,0,kA11,0;";
     var out = [head];
     var lost = 0;
     var lostTypes = {};
@@ -99287,7 +99571,7 @@ function gdDecodeLevel(str, defs) {
     var H = {};
     for (var i = 0; i + 1 < hd.length; i += 2)
         H[hd[i]] = hd[i + 1];
-    var settings = { mode: "cube", speed: 1, bg: "#2850d8", ground: "#1a3aa8", mini: false, song: 0 };
+    var settings = { mode: "cube", speed: 1, bg: "#2850d8", ground: "#1a3aa8", mini: false, song: 0, songStart: 0 };
     var mode = parseInt(H.kA2, 10);
     if (GD_MODES[mode])
         settings.mode = GD_MODES[mode];
@@ -99296,6 +99580,9 @@ function gdDecodeLevel(str, defs) {
     var sp = parseInt(H.kA4, 10);
     if (sp in GD_SPEEDIN)
         settings.speed = GD_SPEEDIN[sp];
+    var songOffset = parseFloat(H.kA13);
+    if (isFinite(songOffset) && songOffset > 0)
+        settings.songStart = Math.round(songOffset * 1000) / 1000;
     var chan = function (v) { var m = {}; String(v).split("_"); var a = String(v).split("_"); for (var i = 0; i + 1 < a.length; i += 2)
         m[a[i]] = a[i + 1]; return m; };
     var colors = {};
@@ -99351,19 +99638,16 @@ function gdDecodeLevel(str, defs) {
         var def = defs[t] || { w: 1, h: 1 };
         var xs = parseFloat(K[128]), ys = parseFloat(K[129]);
         var kx = isFinite(xs) && xs > 0 ? xs : 1, ky = isFinite(ys) && ys > 0 ? ys : 1;
-        var w = Math.max(def.w || 1, 1) * kx, h = (def.h || 1) * ky;
+        var w = Math.max(def.w || 1, .1) * kx, h = (def.h || 1) * ky;
         var gx = parseFloat(K[2]), gy = parseFloat(K[3]);
         if (!isFinite(gx) || !isFinite(gy)) {
             skipped++;
             continue;
         }
-        var x = gx / 30 - (def.kind === "trigger" ? .5 : w / 2), y = gy / 30 - (def.kind === "trigger" ? .5 : h / 2);
-        x = Math.round(x * 100) / 100;
-        y = Math.round(y * 100) / 100;
-        if (y < 0 && def.kind !== "trigger")
-            y = Math.max(y, -0.0);
-        if (y < 0)
-            y = 0;
+        var anchorX = def.kind === "trigger" || t === "text" ? .5 : w / 2;
+        var x = gx / 30 - anchorX, y = gy / 30 - (def.kind === "trigger" ? .5 : h / 2);
+        x = Math.round(x * 1e6) / 1e6;
+        y = Math.round(y * 1e6) / 1e6;
         var deg = parseFloat(K[6]) || 0;
         var fx = K[4] === "1", fy = K[5] === "1";
         var q = 0;
@@ -99378,7 +99662,7 @@ function gdDecodeLevel(str, defs) {
         if (isFinite(cc1) && colors[cc1]) { o.c1 = cc1; o.color = colors[cc1]; }
         var cc2 = parseInt(K[22], 10);
         if (isFinite(cc2) && colors[cc2]) { o.c2 = cc2; o.color2 = colors[cc2]; }
-        if (kx !== 1) o.w = Math.round(Math.max(def.w || 1, 1) * kx * 1000) / 1000;
+        if (kx !== 1) o.w = Math.round(Math.max(def.w || 1, .1) * kx * 1000) / 1000;
         if (ky !== 1) o.h = Math.round((def.h || 1) * ky * 1000) / 1000;
         var canon = GD_ID[t];
         if (canon !== undefined && String(canon) !== String(K[1]))
@@ -99544,7 +99828,7 @@ function gdDecodeLevel(str, defs) {
         objects.push(o);
         if (K[1] === "747") {
             var off = parseFloat(K[54]) || 0;
-            objects.push({ t: "portal_tp_out", x: o.x, y: Math.max(0, Math.round((o.y + off / 30) * 100) / 100), r: 0 });
+            objects.push({ t: "portal_tp_out", x: o.x, y: Math.round((o.y + off / 30) * 1e6) / 1e6, r: 0 });
         }
     }
     return { settings: settings, objects: objects, skipped: skipped };
@@ -99600,7 +99884,7 @@ function gdParseFile(u8, defs) {
         var d = j.data && j.data.objects ? j.data : info.objects ? info : j;
         if (!d.objects)
             throw new Error("fmt");
-        return { settings: Object.assign({ mode: "cube", speed: 1, bg: "#2850d8", ground: "#1a3aa8", mini: false, song: 0 }, d.settings || {}), objects: d.objects, skipped: 0, name: nm, desc: ds };
+        return { settings: Object.assign({ mode: "cube", speed: 1, bg: "#2850d8", ground: "#1a3aa8", mini: false, song: 0, songStart: 0 }, d.settings || {}), objects: d.objects, skipped: 0, name: nm, desc: ds };
     }
     var lv = null;
     if (t0.charAt(0) === "<") {
@@ -99904,6 +100188,15 @@ function CardTitle(_a) {
     var children = _a.children;
     return __h("div", { style: { fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "rgba(255,255,255,.5)", fontWeight: 700, marginBottom: 6 } }, children);
 }
+function SizeFields(p) {
+    var s = p.selected, def = p.def, lang = p.lang;
+    if (!s || !def)
+        return null;
+    var T = function (a, b) { return lang === "it" ? a : b; };
+    var fmt = function (v) { return String(+Number(v).toFixed(3)); };
+    var clamp = function (v, fallback) { return Math.max(.1, Math.min(60, Number(v) || fallback || 1)); };
+    return __h("div", { style: __assign(__assign({}, UI.row), { flexWrap: "wrap", alignItems: "flex-end", marginTop: 4 }), "data-testid": "editor-size", title: T("Puoi anche trascinare il quadratino verde sull'oggetto", "You can also drag the green square on the object") }, __h("label", { style: __assign(__assign({}, UI.label), { margin: 0, width: 74 }) }, T("Larghezza", "Width"), __h("input", { type: "number", min: .1, max: 60, step: .1, value: fmt(s.w || def.w || 1), style: __assign(__assign({}, UI.input), { width: 66 }), onChange: function (e) { return p.updateSel({ w: clamp(e.target.value, def.w) }); }, "data-testid": "editor-selected-w" })), __h("label", { style: __assign(__assign({}, UI.label), { margin: 0, width: 74 }) }, T("Altezza", "Height"), __h("input", { type: "number", min: .1, max: 60, step: .1, value: fmt(s.h || def.h || 1), style: __assign(__assign({}, UI.input), { width: 66 }), onChange: function (e) { return p.updateSel({ h: clamp(e.target.value, def.h) }); }, "data-testid": "editor-selected-h" })), __h("button", { type: "button", style: UI.btn, onClick: function () { return p.updateSel({ w: null, h: null }); }, title: T("Dimensioni del tipo", "Type dimensions"), "data-testid": "editor-size-reset" }, "↺"));
+}
 function ParamEditor(_a) {
     var s = _a.s, def = _a.def, lang = _a.lang, updateSel = _a.updateSel;
     var T = function (a, b) { return lang === "it" ? a : b; };
@@ -100011,6 +100304,7 @@ function InfoPanel(p) {
     var kids = [];
     kids.push(__h("p", { key: "t", style: { fontWeight: 600, margin: 0 }, "data-testid": "editor-selected-type" }, (lang === "it" ? def.it : def.en) + (count > 1 ? "  +" + (count - 1) : "")));
     kids.push(__h("p", { key: "c", style: __assign(__assign({}, UI.mono), { margin: 0 }) }, "x " + fmt(s.x) + " · y " + fmt(s.y) + " · " + fmt(normAng(angleOf(s))) + "°" + (s.grp && s.grp.length ? " · G" + s.grp.join(",") : "")));
+    kids.push(__h(SizeFields, { key: "dim", selected: s, def: def, lang: lang, updateSel: p.updateSel }));
     if (s.t === "text")
         kids.push(__h("input", { key: "tx", style: UI.input, value: (_a = s.text) !== null && _a !== void 0 ? _a : "", maxLength: 20, placeholder: T("Testo", "Text"), onChange: function (e) { return p.updateSel({ text: e.target.value }); }, "data-testid": "editor-selected-text-input" }));
     if (colorable)
@@ -100062,7 +100356,8 @@ function EditPanel(p) {
     var _b = __read(useState(null), 2), angTxt = _b[0], setAngTxt = _b[1];
     var grpList = s && Array.isArray(s.grp) ? s.grp : [];
     var g = Math.max(1, Math.min(9999, Number(gid) || 1));
-    return __h("div", { className: "gde-cards", "data-testid": "editor-edit-panel" }, !s ? __h("div", { style: __assign(__assign({}, CARD), { flex: "1 1 100%", color: "rgba(255,255,255,.7)" }) }, T("Seleziona uno o più oggetti (tocca, oppure Maiusc/Ctrl + clic, oppure ", "Select one or more objects (tap, or Shift/Ctrl + click, or "), __h("button", { type: "button", style: p.multiMode ? UI.btnOn : UI.btn, onClick: function () { return p.setMultiMode(!p.multiMode); }, "data-testid": "editor-multi-toggle" }, T("Selezione multipla", "Multi-select")), " ", __h("button", { type: "button", style: UI.btn, onClick: p.selectAll, "data-testid": "editor-select-all" }, T("Tutti", "All")), ")") : null, s && __GD52__1.DEF[s.t] && __GD52__1.DEF[s.t].kind === "trigger" ? __h("div", { style: __assign(__assign({}, CARD), { flex: "1 1 100%" }), "data-testid": "editor-trigger-edit-options" }, __h("label", { style: UI.label }, __h("input", { type: "checkbox", checked: !!s.touch, onChange: function (e) { return p.updateSel({ touch: e.target.checked }); }, "data-testid": "editor-trigger-edit-touch" }), T("Solo al tocco (non automatico)", "Only on touch (not automatic)")), __h("p", { style: { fontSize: 11, color: "rgba(255,255,255,.45)", margin: 0 } }, T("Se disattivato, il trigger funziona come sempre.", "If off, the trigger works as usual."))) : null, __h("div", { style: __assign(__assign(__assign({}, CARD), off), { flex: "1 1 230px" }), "data-testid": "editor-nudge" }, __h(CardTitle, null, T("Sposta", "Move")), __h("div", { style: __assign(__assign({}, UI.row), { marginBottom: 8 }) }, NUDGE.map(function (n) { return __h("button", { key: n.id, type: "button", style: p.step === n.id ? UI.btnOn : UI.btn, onClick: function () { return p.setStep(n.id); }, "data-testid": "nudge-step-" + n.id }, lang === "it" ? n.it : n.en); })), __h("div", { className: "gde-pad" }, __h("span"), __h(RepeatBtn, { onStep: function () { return p.nudge(0, 1); }, style: UI.padBtn, testid: "nudge-up" }, "↑"), __h("span"), __h(RepeatBtn, { onStep: function () { return p.nudge(-1, 0); }, style: UI.padBtn, testid: "nudge-left" }, "←"), __h("span", { style: __assign(__assign({ display: "flex", alignItems: "center", justifyContent: "center" }, UI.mono), { fontSize: 10 }) }, T("sposta", "move")), __h(RepeatBtn, { onStep: function () { return p.nudge(1, 0); }, style: UI.padBtn, testid: "nudge-right" }, "→"), __h("span"), __h(RepeatBtn, { onStep: function () { return p.nudge(0, -1); }, style: UI.padBtn, testid: "nudge-down" }, "↓"), __h("span"))), __h("div", { style: __assign(__assign(__assign({}, CARD), off), { flex: "1 1 240px" }), "data-testid": "editor-rotate-panel" }, __h(CardTitle, null, T("Ruota come vuoi", "Free rotation")), __h("div", { style: __assign(__assign({}, UI.row), { marginBottom: 6 }) }, __h("input", { type: "number", step: 1, value: angTxt !== null && angTxt !== void 0 ? angTxt : Math.round(ang * 100) / 100, style: __assign(__assign({}, UI.input), { width: 84 }), onFocus: function () { return setAngTxt(String(Math.round(ang * 100) / 100)); }, onBlur: function () { return setAngTxt(null); }, onChange: function (e) { setAngTxt(e.target.value); var v = Number(e.target.value); if (e.target.value !== "" && Number.isFinite(v))
+    var sizeCard = s && __GD52__1.DEF[s.t] ? __h("div", { style: __assign(__assign({}, CARD), { flex: "1 1 230px" }), "data-testid": "editor-size-card" }, __h(CardTitle, null, T("Dimensioni", "Size")), __h(SizeFields, { selected: s, def: __GD52__1.DEF[s.t], lang: lang, updateSel: p.updateSel })) : null;
+    return __h("div", { className: "gde-cards", "data-testid": "editor-edit-panel" }, sizeCard, !s ? __h("div", { style: __assign(__assign({}, CARD), { flex: "1 1 100%", color: "rgba(255,255,255,.7)" }) }, T("Seleziona uno o più oggetti (tocca, oppure Maiusc/Ctrl + clic, oppure ", "Select one or more objects (tap, or Shift/Ctrl + click, or "), __h("button", { type: "button", style: p.multiMode ? UI.btnOn : UI.btn, onClick: function () { return p.setMultiMode(!p.multiMode); }, "data-testid": "editor-multi-toggle" }, T("Selezione multipla", "Multi-select")), " ", __h("button", { type: "button", style: UI.btn, onClick: p.selectAll, "data-testid": "editor-select-all" }, T("Tutti", "All")), ")") : null, s && __GD52__1.DEF[s.t] && __GD52__1.DEF[s.t].kind === "trigger" ? __h("div", { style: __assign(__assign({}, CARD), { flex: "1 1 100%" }), "data-testid": "editor-trigger-edit-options" }, __h("label", { style: UI.label }, __h("input", { type: "checkbox", checked: !!s.touch, onChange: function (e) { return p.updateSel({ touch: e.target.checked }); }, "data-testid": "editor-trigger-edit-touch" }), T("Solo al tocco (non automatico)", "Only on touch (not automatic)")), __h("p", { style: { fontSize: 11, color: "rgba(255,255,255,.45)", margin: 0 } }, T("Se disattivato, il trigger funziona come sempre.", "If off, the trigger works as usual."))) : null, __h("div", { style: __assign(__assign(__assign({}, CARD), off), { flex: "1 1 230px" }), "data-testid": "editor-nudge" }, __h(CardTitle, null, T("Sposta", "Move")), __h("div", { style: __assign(__assign({}, UI.row), { marginBottom: 8 }) }, NUDGE.map(function (n) { return __h("button", { key: n.id, type: "button", style: p.step === n.id ? UI.btnOn : UI.btn, onClick: function () { return p.setStep(n.id); }, "data-testid": "nudge-step-" + n.id }, lang === "it" ? n.it : n.en); })), __h("div", { className: "gde-pad" }, __h("span"), __h(RepeatBtn, { onStep: function () { return p.nudge(0, 1); }, style: UI.padBtn, testid: "nudge-up" }, "↑"), __h("span"), __h(RepeatBtn, { onStep: function () { return p.nudge(-1, 0); }, style: UI.padBtn, testid: "nudge-left" }, "←"), __h("span", { style: __assign(__assign({ display: "flex", alignItems: "center", justifyContent: "center" }, UI.mono), { fontSize: 10 }) }, T("sposta", "move")), __h(RepeatBtn, { onStep: function () { return p.nudge(1, 0); }, style: UI.padBtn, testid: "nudge-right" }, "→"), __h("span"), __h(RepeatBtn, { onStep: function () { return p.nudge(0, -1); }, style: UI.padBtn, testid: "nudge-down" }, "↓"), __h("span"))), __h("div", { style: __assign(__assign(__assign({}, CARD), off), { flex: "1 1 240px" }), "data-testid": "editor-rotate-panel" }, __h(CardTitle, null, T("Ruota come vuoi", "Free rotation")), __h("div", { style: __assign(__assign({}, UI.row), { marginBottom: 6 }) }, __h("input", { type: "number", step: 1, value: angTxt !== null && angTxt !== void 0 ? angTxt : Math.round(ang * 100) / 100, style: __assign(__assign({}, UI.input), { width: 84 }), onFocus: function () { return setAngTxt(String(Math.round(ang * 100) / 100)); }, onBlur: function () { return setAngTxt(null); }, onChange: function (e) { setAngTxt(e.target.value); var v = Number(e.target.value); if (e.target.value !== "" && Number.isFinite(v))
             p.setAngleAbs(v, true); }, "data-testid": "rot-input" }), __h("span", null, "°")), __h("input", { type: "range", min: -180, max: 180, step: 1, value: Math.round(ang), style: { width: "100%" }, onPointerDown: p.pushHist, onChange: function (e) { return p.setAngleAbs(Number(e.target.value), false); }, "data-testid": "rot-slider" }), __h("div", { style: __assign(__assign({}, UI.row), { marginTop: 6 }) }, [[-90, "−90°"], [-15, "−15°"], [-1, "−1°"], [1, "+1°"], [15, "+15°"], [90, "+90°"]].map(function (_a) {
         var _b = __read(_a, 2), d = _b[0], l = _b[1];
         return __h("button", { key: l, type: "button", style: UI.btn, onClick: function () { return p.rotBy(d); }, "data-testid": "rot-by-" + d }, l);
@@ -100223,6 +100518,7 @@ function Editor() {
     var _e = __read(useState(""), 2), name = _e[0], setName = _e[1];
     var _f = __read(useState(""), 2), desc = _f[0], setDesc = _f[1];
     var _g = __read(useState(false), 2), dirty = _g[0], setDirty = _g[1];
+    var metaDirty = !!meta && (name !== meta.name || desc !== meta.description);
     var _h = __read(useState("build"), 2), tool = _h[0], setTool = _h[1];
     var _j = __read(useState("blocks"), 2), cat = _j[0], setCat = _j[1];
     var _k = __read(useState("block"), 2), type = _k[0], setType = _k[1];
@@ -100372,6 +100668,8 @@ function Editor() {
         }); },
         onSuccess: function (l) {
             setMeta(l);
+            setName(l.name);
+            setDesc(l.description);
             setDirty(false);
             __GD63__1.queryClient.setQueryData(["level", id], l);
             __GD63__1.queryClient.invalidateQueries({ queryKey: ["mine"] });
@@ -100387,6 +100685,15 @@ function Editor() {
         },
         onError: function (e) { return __GD23__1.toast.error(errText(e, t("error"))); }
     });
+    var publishNow = function () {
+        if (!meta || dirty)
+            return;
+        if (metaDirty) {
+            save.mutate(undefined, { onSuccess: function () { publish.mutate(); } });
+            return;
+        }
+        publish.mutate();
+    };
     var startTest = function (mode) { return __awaiter(_this, void 0, void 0, function () {
         var _a;
         return __generator(this, function (_b) {
@@ -100547,10 +100854,22 @@ function Editor() {
                         ctx.strokeRect(sx(o.x) - 2, sy(o.y + Math.max(o.h || def.h, 1)) - 2, Math.max(o.w || def.w, 1) * u + 4, Math.max(o.h || def.h, 1) * u + 4);
                     }
                 });
+                if ((tl === "select" || tl === "edit") && s !== null && d.objects[s] && !(live.current.extra || []).length) {
+                    var ro = d.objects[s], rdf = __GD52__1.DEF[ro.t];
+                    if (rdf) {
+                        var rw = Math.max(ro.w || rdf.w, .1), rh = Math.max(ro.h || rdf.h, .1);
+                        var rx = sx(ro.x + rw), ry = sy(ro.y);
+                        ctx.fillStyle = "#00ff66";
+                        ctx.strokeStyle = "#04120a";
+                        ctx.lineWidth = 2;
+                        ctx.fillRect(rx - 6, ry - 6, 12, 12);
+                        ctx.strokeRect(rx - 6, ry - 6, 12, 12);
+                    }
+                }
                 if (tl === "edit" && s !== null && d.objects[s]) {
                     var o = d.objects[s], df = __GD52__1.DEF[o.t];
                     if (df) {
-                        var Wd = Math.max(df.w, 1), Hd = Math.max(df.h, 1);
+                        var Wd = Math.max(o.w || df.w, .1), Hd = Math.max(o.h || df.h, .1);
                         var cx = sx(o.x + Wd / 2), cy = sy(o.y + Hd / 2);
                         var th = angleOf(o) * Math.PI / 180, L_1 = Math.max(Wd, Hd) / 2 * u + 30;
                         var hx = cx + Math.sin(th) * L_1, hy = cy - Math.cos(th) * L_1;
@@ -100759,6 +101078,17 @@ function Editor() {
     var onDown = function (e) {
         e.target.setPointerCapture(e.pointerId);
         {
+            var rz = resizeScreen();
+            if (rz) {
+                var rrect = canvasRef.current.getBoundingClientRect();
+                if (Math.hypot(e.clientX - rrect.left - rz.hx, e.clientY - rrect.top - rz.hy) < 18) {
+                    var rw0 = toWorld(e);
+                    drag.current = { rs: true, idx: live.current.sel, wx: rw0.x, wy: rw0.y, ow: rz.w, oh: rz.h, pushed: false, moved: false };
+                    return;
+                }
+            }
+        }
+        {
             var hs = handleScreen();
             if (hs) {
                 var rect = canvasRef.current.getBoundingClientRect();
@@ -100806,6 +101136,22 @@ function Editor() {
             rotDrag(e);
             return;
         }
+        if (d.rs) {
+            var rp = toWorld(e), stepR = uiRef.current.free ? .01 : uiRef.current.snap ? 1 : .1;
+            var nw = Math.max(.1, Math.min(60, Math.round((d.ow + rp.x - d.wx) / stepR) * stepR));
+            var nh = Math.max(.1, Math.min(60, Math.round((d.oh + rp.y - d.wy) / stepR) * stepR));
+            d.moved = true;
+            if (!d.pushed) {
+                pushHist();
+                d.pushed = true;
+            }
+            var rd = live.current.data;
+            if (!rd)
+                return;
+            setData(__assign(__assign({}, rd), { objects: rd.objects.map(function (o, k) { return k === d.idx ? __assign(__assign({}, o), { w: Math.round(nw * 100) / 100, h: Math.round(nh * 100) / 100 }) : o; }) }));
+            setDirty(true);
+            return;
+        }
         if (d.swipe) {
             var pts = [], n = Math.max(1, Math.ceil(Math.hypot(w.x - d.last.x, w.y - d.last.y) * 3));
             for (var k = 1; k <= n; k++)
@@ -100845,6 +101191,8 @@ function Editor() {
     var onUp = function (e) {
         var d = drag.current;
         drag.current = null;
+        if (d && d.rs)
+            return;
         if (d && d.swipe) {
             if (history.current.length > d.h0 + 1)
                 history.current.splice(d.h0 + 1);
@@ -100992,6 +101340,16 @@ function Editor() {
         var objs = (_b = (_a = live.current.data) === null || _a === void 0 ? void 0 : _a.objects) !== null && _b !== void 0 ? _b : [];
         return 1 + Math.max.apply(Math, __spreadArray(__spreadArray([0], __read(objs.flatMap(function (o) { return o.grp || []; })), false), __read(objs.filter(function (o) { return o.tg != null; }).map(function (o) { return o.tg; })), false));
     };
+    var resizeScreen = function () {
+        var _a = live.current, s0 = _a.sel, d0 = _a.data, tl0 = _a.tool, u0 = _a.zoom, ex0 = _a.extra;
+        if ((tl0 !== "select" && tl0 !== "edit") || s0 === null || !d0 || (ex0 || []).length)
+            return null;
+        var o = d0.objects[s0], df = o ? __GD52__1.DEF[o.t] : null, cv0 = canvasRef.current;
+        if (!df || !cv0)
+            return null;
+        var w = Math.max(o.w || df.w, .1), h = Math.max(o.h || df.h, .1);
+        return { w: w, h: h, hx: (o.x + w - cam.current.x) * u0, hy: cv0.clientHeight - (o.y - cam.current.y) * u0 };
+    };
     var handleScreen = function () {
         var _a = live.current, s0 = _a.sel, d0 = _a.data, tl0 = _a.tool, u0 = _a.zoom;
         if (tl0 !== "edit" || s0 === null || !d0)
@@ -101001,7 +101359,7 @@ function Editor() {
         var cv0 = canvasRef.current;
         if (!df || !cv0)
             return null;
-        var Wd = Math.max(df.w, 1), Hd = Math.max(df.h, 1);
+        var Wd = Math.max(o.w || df.w, .1), Hd = Math.max(o.h || df.h, .1);
         var cx = (o.x + Wd / 2 - cam.current.x) * u0, cy = cv0.clientHeight - (o.y + Hd / 2 - cam.current.y) * u0;
         var th = angleOf(o) * Math.PI / 180;
         var L = Math.max(Wd, Hd) / 2 * u0 + 30;
@@ -101082,12 +101440,12 @@ function Editor() {
     }, []);
     useEffect(function () {
         var h = function (e) {
-            if (dirty)
+            if (dirty || metaDirty)
                 e.preventDefault();
         };
         window.addEventListener("beforeunload", h);
         return function () { return window.removeEventListener("beforeunload", h); };
-    }, [dirty]);
+    }, [dirty, metaDirty]);
     var palette = useMemo(function () { return __GD52__1.OBJECTS.filter(function (o) { return o.cat === cat; }); }, [cat]);
     var L = lang === "it" ? 0 : 1;
     if (!data || !meta) {
@@ -101131,7 +101489,7 @@ function Editor() {
             columnNumber: 12
         }, this);
     }
-    var canPublish = meta.verified && !dirty && !meta.published;
+    var canPublish = meta.verified && !dirty && (metaDirty || !meta.published);
     var toolBtn = function (k, Icon, label) { return _jsxDEV("button", {
         onClick: function () {
             setTool(k);
@@ -101208,7 +101566,6 @@ function Editor() {
                         value: name,
                         onChange: function (e) {
                             setName(e.target.value);
-                            setDirty(true);
                         },
                         maxLength: 40,
                         className: "h-9 w-44 bg-black/40 font-heading font-semibold sm:w-60",
@@ -101237,7 +101594,7 @@ function Editor() {
                         lineNumber: 530,
                         columnNumber: 9
                     }, this),
-                    dirty && _jsxDEV("span", {
+                    (dirty || metaDirty) && _jsxDEV("span", {
                         className: "font-mono text-xs text-[#fbbf24]",
                         "data-testid": "editor-unsaved",
                         "x-file-name": "Editor",
@@ -101479,8 +101836,8 @@ function Editor() {
                             }, this),
                             _jsxDEV("button", {
                                 className: "gd-btn bg-[#00ff66] py-2 text-sm text-[#051108]",
-                                onClick: function () { return publish.mutate(); },
-                                disabled: !canPublish || publish.isPending,
+                                onClick: publishNow,
+                                disabled: !canPublish || publish.isPending || save.isPending,
                                 title: t("publishRule"),
                                 "data-testid": "editor-publish-button",
                                 "x-file-name": "Editor",
@@ -101715,7 +102072,6 @@ function Editor() {
                                             maxLength: 200,
                                             onChange: function (e) {
                                                 setDesc(e.target.value);
-                                                setDirty(true);
                                             },
                                             className: "bg-black/40",
                                             "data-testid": "editor-settings-description",
@@ -102000,9 +102356,9 @@ function Editor() {
                                             fileName: _jsxFileName,
                                             lineNumber: 643,
                                             columnNumber: 15
-                                        }, this), __h("label", { className: "grid gap-1", "data-testid": "editor-settings-trio-label" }, t("trioIcons"), __h("input", { type: "number", min: 3, max: 15, value: Number(data.settings.trioMax) || 3, onChange: function (e) { return setSettings({ trioMax: Math.max(3, Math.min(15, Number(e.target.value) || 3)) }); }, className: "h-9 rounded-md border border-white/10 bg-black/40 px-2", "data-testid": "editor-settings-trio-max" })), __h(GdFilePanel, { data: data, name: name, desc: desc, lang: lang, onSong: function (v, tr, url) { return setSettings({ song: v, songName: tr ? tr.name : undefined, songFile: tr ? (tr.file || tr.name) : undefined, songUrl: url || undefined }); }, onLoad: function (d, n, ds) { history.current.push(live.current.data.objects); setData(d); if (n)
+                                        }, this), __h("label", { className: "grid gap-1", "data-testid": "editor-settings-song-start-label" }, t("songStart"), __h("input", { type: "number", min: 0, max: 36000, step: .1, value: Math.max(0, Number(data.settings.songStart) || 0), onChange: function (e) { return setSettings({ songStart: Math.max(0, Math.min(36000, Number(e.target.value) || 0)) }); }, className: "h-9 rounded-md border border-white/10 bg-black/40 px-2", "data-testid": "editor-settings-song-start" })), __h("label", { className: "grid gap-1", "data-testid": "editor-settings-trio-label" }, t("trioIcons"), __h("input", { type: "number", min: 3, max: 15, value: Number(data.settings.trioMax) || 3, onChange: function (e) { return setSettings({ trioMax: Math.max(3, Math.min(15, Number(e.target.value) || 3)) }); }, className: "h-9 rounded-md border border-white/10 bg-black/40 px-2", "data-testid": "editor-settings-trio-max" })), __h(GdFilePanel, { data: data, name: name, desc: desc, lang: lang, onSong: function (v, tr, url) { return setSettings({ song: v, songName: tr ? tr.name : undefined, songFile: tr ? (tr.file || tr.name) : undefined, songUrl: url || undefined }); }, onLoad: function (d, n, ds) { history.current.push(live.current.data.objects); setData(d); if (n)
                                                 setName(n); if (ds)
-                                                setDesc(ds); setDirty(true); } }), __h(MusicPicker, { value: data.settings.song, url: data.settings.songUrl, onPick: function (v, tr, url) { return setSettings({ song: v, songName: tr ? tr.name : undefined, songFile: tr ? (tr.file || tr.name) : undefined, songUrl: url || undefined }); }, lang: lang }), typeof data.settings.song === "string" ? null : __h(SongTools, { seed: data.settings.song || 1, lang: lang })
+                                                setDesc(ds); setDirty(true); } }), __h(MusicPicker, { value: data.settings.song, url: data.settings.songUrl, startAt: Math.max(0, Number(data.settings.songStart) || 0), onPick: function (v, tr, url) { return setSettings({ song: v, songName: tr ? tr.name : undefined, songFile: tr ? (tr.file || tr.name) : undefined, songUrl: url || undefined }); }, lang: lang }), typeof data.settings.song === "string" ? null : __h(SongTools, { seed: data.settings.song || 1, lang: lang })
                                     ]
                                 }, void 0, true, {
                                     fileName: _jsxFileName,
@@ -102761,7 +103117,8 @@ var MODE_NAMES = {
     wave: "Wave",
     robot: "Robot",
     spider: "Spider",
-    swing: "Swing"
+    swing: "Swing",
+    boat: "Boat"
 };
 function IconKit() {
     var _this = this;
@@ -105099,7 +105456,7 @@ function Login() {
                                 "x-source-editable": "false",
                                 children: [
                                     ["30+2", t("mainLevels")],
-                                    ["8", "Gamemodes"],
+                                    ["9", "Gamemodes"],
                                     ["70+", t("iconKit")]
                                 ].map(function (_a) {
                                     var _b = __read(_a, 2), a = _b[0], b = _b[1];
@@ -105559,6 +105916,7 @@ var __GD63__1 = require("63");
 var __GD18__1 = __importDefault(require("18"));
 var RefreshRuntime = __importStar(require("0"));
 __importMeta.hot = (0, __GD1__1.createHotContext)("/src/pages/Online.tsx");
+var useEffect = __GD17__1.default["useEffect"];
 var useState = __GD17__1.default["useState"];
 var _jsxDEV = __GD18__1.default["jsxDEV"];
 var _jsxFileName = "/app/frontend/src/pages/Online.tsx";
@@ -105569,12 +105927,60 @@ var SORTS = [
     "popular",
     "saved"
 ];
+var ONLINE_VERSION_KEY = "gd-online-versions-v1";
+function readSeenLevelVersions() {
+    try {
+        var raw = localStorage.getItem(ONLINE_VERSION_KEY);
+        var out = raw ? JSON.parse(raw) : null;
+        return out && typeof out === "object" ? out : {};
+    }
+    catch (e) {
+        return {};
+    }
+}
+function saveSeenLevelVersions(seen) {
+    try {
+        localStorage.setItem(ONLINE_VERSION_KEY, JSON.stringify(seen));
+    }
+    catch (e) { }
+}
+function levelVersion(l) {
+    var v = Number(l && l.version);
+    return isFinite(v) && v > 0 ? v : 0;
+}
+function baselineLevelVersions(prev, rows) {
+    if (!rows)
+        return prev;
+    var next = null;
+    for (var i = 0; i < rows.length; i++) {
+        var l = rows[i], v = levelVersion(l);
+        if (v && !(Number(prev[l.id]) > 0)) {
+            if (!next)
+                next = Object.assign({}, prev);
+            next[l.id] = v;
+        }
+    }
+    return next || prev;
+}
+function rememberLevelVersion(prev, l) {
+    var v = levelVersion(l);
+    if (!v || Number(prev[l.id]) === v)
+        return prev;
+    var next = Object.assign({}, prev);
+    next[l.id] = v;
+    return next;
+}
+function levelHasUpdate(seen, l) {
+    var v = levelVersion(l), old = Number(seen[l.id]);
+    return !!(v && isFinite(old) && old > 0 && old < v);
+}
 function Online() {
     var _this = this;
     var _a, _b;
     _s();
     var _d = __read((0, __GD59__1.useLang)(), 2), lang = _d[0], t = _d[1];
     var me = (0, __GD62__1.useMe)();
+    var _sv = __read(useState(readSeenLevelVersions), 2), seenVersions = _sv[0], setSeenVersions = _sv[1];
     var _e = __read(useState(""), 2), q = _e[0], setQ = _e[1];
     var _f = __read(useState("recent"), 2), sort = _f[0], setSort = _f[1];
     var list = (0, __GD6__1.useQuery)({
@@ -105586,6 +105992,14 @@ function Online() {
         ],
         queryFn: function () { return (0, __GD57__1.apiGet)("/levels/online?q=".concat(encodeURIComponent(q), "&sort=").concat(sort)); }
     });
+    useEffect(function () {
+        setSeenVersions(function (prev) {
+            var next = baselineLevelVersions(prev, list.data);
+            if (next !== prev)
+                saveSeenLevelVersions(next);
+            return next;
+        });
+    }, [list.data]);
     var like = (0, __GD6__1.useMutation)({
         mutationFn: function (id) { return (0, __GD57__1.apiPost)("/levels/".concat(id, "/like")); },
         onSuccess: function () { return __GD63__1.queryClient.invalidateQueries({ queryKey: ["online"] }); }
@@ -105607,13 +106021,22 @@ function Online() {
     });
     var renameLevel = (0, __GD6__1.useMutation)({
         mutationFn: function (x) { return (0, __GD57__1.apiPut)("/levels/".concat(x.id), { name: x.name }); },
-        onSuccess: function () {
+        onSuccess: function (l) {
+            __GD63__1.queryClient.setQueryData(["level", l.id], l);
             __GD63__1.queryClient.invalidateQueries({ queryKey: ["online"] });
             __GD63__1.queryClient.invalidateQueries({ queryKey: ["mine"] });
             __GD23__1.toast.success(t("renamed"));
         },
         onError: function () { return __GD23__1.toast.error(t("error")); }
     });
+    var markLevelSeen = function (l) {
+        setSeenVersions(function (prev) {
+            var next = rememberLevelVersion(prev, l);
+            if (next !== prev)
+                saveSeenLevelVersions(next);
+            return next;
+        });
+    };
     return _jsxDEV("div", {
         className: "relative min-h-screen gd-grid-bg",
         "data-testid": "online-page",
@@ -105810,7 +106233,7 @@ function Online() {
                                 lineNumber: 47,
                                 columnNumber: 39
                             }, this),
-                            !list.isError && ((_b = list.data) === null || _b === void 0 ? void 0 : _b.map(function (l, i) { var lvInfo = l.data && window.__gdLevelInfo ? window.__gdLevelInfo(l.data, lang) : null; return _jsxDEV("div", {
+                            !list.isError && ((_b = list.data) === null || _b === void 0 ? void 0 : _b.map(function (l, i) { var lvInfo = l.data && window.__gdLevelInfo ? window.__gdLevelInfo(l.data, lang) : null; var updated = levelHasUpdate(seenVersions, l); return _jsxDEV("div", {
                                 className: "flex flex-wrap items-center gap-4 rounded-2xl border border-white/10 bg-[#121824]/85 p-4 backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-300",
                                 style: { animationDelay: "".concat(i * 30, "ms") },
                                 "data-testid": "online-level-".concat(l.id),
@@ -106077,9 +106500,17 @@ function Online() {
                                     }, _this),
                                     _jsxDEV(__GD16__1.Link, {
                                         to: "/play/online/".concat(l.id),
-                                        className: "gd-btn bg-[#00ff66] py-2 text-[#051108]",
-                                        "data-testid": "online-level-play-button",
-                                        children: [_jsxDEV(__GD61__1.Play, {
+                                        onClick: updated ? function (e) { e.preventDefault(); markLevelSeen(l); } : undefined,
+                                        className: "gd-btn py-2 " + (updated ? "bg-[#ffe600] text-[#2a1c00]" : "bg-[#00ff66] text-[#051108]"),
+                                        "data-testid": updated ? "online-level-update-button" : "online-level-play-button",
+                                        title: updated ? t("updateHint") : undefined,
+                                        children: [updated ? _jsxDEV(__GD61__1.RefreshCw, {
+                                                className: "size-4"
+                                            }, void 0, false, {
+                                                fileName: _jsxFileName,
+                                                lineNumber: 68,
+                                                columnNumber: 140
+                                            }, _this) : _jsxDEV(__GD61__1.Play, {
                                                 className: "size-4 fill-current",
                                                 "x-file-name": "Online",
                                                 "x-line-number": "66",
@@ -106091,7 +106522,7 @@ function Online() {
                                                 fileName: _jsxFileName,
                                                 lineNumber: 68,
                                                 columnNumber: 140
-                                            }, _this), t("play2")]
+                                            }, _this), t(updated ? "update" : "play2")]
                                     }, void 0, true, {
                                         fileName: _jsxFileName,
                                         lineNumber: 68,
@@ -106356,6 +106787,7 @@ function Play() {
         title: main ? main.name : (_b = (_a = online.data) === null || _a === void 0 ? void 0 : _a.name) !== null && _b !== void 0 ? _b : "",
         icons: (0, __GD39__1.iconColors)(progress === null || progress === void 0 ? void 0 : progress.icons),
         startPractice: sp.get("practice") === "1",
+        mainLevel: !!main,
         onExit: back,
         onDeath: onDeath,
         onComplete: onComplete,

@@ -25,7 +25,7 @@ livelli online e lobby.
 Il Worker online si rigenera con `node online/build.js`; il manifest da pubblicare è
 `online/dist/manifest.json`. Account, livelli, progressi e Mi piace sono salvati nell'archivio R2 del sito,
 quindi sopravvivono ai riavvii. Anche i file audio caricati nelle impostazioni dei livelli vengono salvati
-su R2 (massimo 16 MB) e chi prova il livello li scarica automaticamente per ascoltarli. Anche le lobby sono condivise tra le istanze del Worker tramite R2:
+su R2 (massimo 30 MB) e chi prova il livello li scarica automaticamente per ascoltarli. Anche le lobby sono condivise tra le istanze del Worker tramite R2:
 restano temporanee, ma host e amico possono entrare nella stessa lobby anche se le richieste arrivano a
 istanze diverse del Worker. Nella pagina Livelli online puoi eliminare i livelli che hai pubblicato e usare
 la categoria Salvati per ritrovare i livelli che hai provato, con la possibilità di rimuoverli dai salvati.
